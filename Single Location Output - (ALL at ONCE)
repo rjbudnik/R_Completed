@@ -1,0 +1,3938 @@
+---
+title: "**Single Location Export**"
+author: '`r params$author`'
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output: 
+  html_document:
+    theme: darkly
+    toc: true
+    toc_float:
+      collapsed: true
+params:
+  author:
+    label: "Analysis Conducted By:"
+    value: Ryan Budnik
+    input: select
+    choices: [Ryan Budnik, Graydon Marzen, Jim Rouse, Ryan Frasch, Shawn Bryant]
+  data:
+    label: "Yearly Dataset:"
+    value: 18CC.csv
+    input: select
+    choices: [18CC.csv]
+  list:
+    label: "Entry List (EL):"
+    value: CEL18.csv
+    input: select
+    choices: [CEL18.csv]
+  storage:
+    label: "Cold Storage (CS):"
+    value: CCS18.csv
+    input: select
+    choices: [CCS18.csv]
+  year:
+    label: "Year"
+    value: 2018
+    input: select
+    choices: [2016, 2017, 2018]
+---
+
+# Overview:
+
+The following report renders the complete **District_Corn_Web** pre-formatted Excel tables, with the yearly (`r params$year`) cleaned data for Internet publication purposes.
+
+Un-used locations must be physically commented out to remove them from tables.
+
+```{r libs, include = FALSE}
+library(rmarkdown)
+library(knitr)
+library(dplyr)
+library(nlme)
+library(lme4)
+library(lmerTest)
+library(predictmeans)
+library(shiny)
+library(shinythemes)
+library(emmeans)
+library(sjstats)
+library(rJava)
+library(XLConnect)
+```
+
+# Global Parameters:
+
+```{r Global_Parameters, echo=FALSE, comment=NA, message=FALSE}
+## Global Parameters:
+  ## Year Code:
+YR<-8 
+  ## Converison Factor:
+CCF<-8.067
+  ## Yearly Price Per Bushel Average:
+PPB<-3.25
+```
+
+# Functions:
+
+```{r Functions, echo=FALSE, comment=NA, message=FALSE}
+## CV Function:
+CV<-function(model){
+  if(class(model)=="merMod"|class(model)=="merModLmerTest"|class(model)=="lmerMod"|class(model)=="lmerModLmerTest"){
+    GM<-mean(model@frame[,1])
+    MS<-sigma(model)**2
+return(paste(round(100*sqrt(MS)/GM,3)))
+  }
+  else(stop("model not of class merMod or merModLmerTest"))
+}
+```
+
+# Entry List (EL)
+
+```{r Entry_List_Data, echo=FALSE, comment=NA, message=FALSE}
+## Entry List Data Import::
+EL<-read.csv(c(params$list),header=T)
+
+## NORTH
+## North Early:
+N.E.EL<-filter(EL, book.name==paste("C", c(YR), "1A", sep=""))
+N.E.EL<-N.E.EL[!N.E.EL$private == "Yes", ]
+N.E.EL<-N.E.EL%>%select("company", "hybrid", "pedid", "code", "entry")
+## North Full:
+N.F.EL<-filter(EL, book.name==paste("C", c(YR), "1B", sep=""))
+N.F.EL<-N.F.EL[!N.F.EL$private == "Yes", ]
+N.F.EL<-N.F.EL%>%select("company", "hybrid", "pedid", "code", "entry")
+
+## CENTRAL
+## Central Early:
+C.E.EL<-filter(EL, book.name==paste("C", c(YR), "2A", sep=""))
+C.E.EL<-C.E.EL[!C.E.EL$private == "Yes", ]
+C.E.EL<-C.E.EL%>%select("company", "hybrid", "pedid", "code", "entry")
+## Central Full:
+C.F.EL<-filter(EL, book.name==paste("C", c(YR), "2B", sep=""))
+C.F.EL<-C.F.EL[!C.F.EL$private == "Yes", ]
+C.F.EL<-C.F.EL%>%select("company", "hybrid", "pedid", "code", "entry")
+
+## SOUTH
+## South Early:
+S.E.EL<-filter(EL, book.name==paste("C", c(YR), "3A", sep=""))
+S.E.EL<-S.E.EL[!S.E.EL$private == "Yes", ]
+S.E.EL<-S.E.EL%>%select("company", "hybrid", "pedid", "code", "entry")
+## South Full:
+S.F.EL<-filter(EL, book.name==paste("C", c(YR), "3B", sep=""))
+S.F.EL<-S.F.EL[!S.F.EL$private == "Yes", ]
+S.F.EL<-S.F.EL%>%select("company", "hybrid", "pedid", "code", "entry")
+```
+
+# Cold Storage (CS)
+
+```{r Cold_Storage_Data, echo=FALSE, comment=NA, message=FALSE}
+## Import Cold Storage Data:
+CS<-read.csv(c(params$storage),header=T)
+
+## Subset Cold Storage:
+## NORTH
+## North Early
+N.E.CS<-subset(CS, pedid %in% N.E.EL$pedid)
+N.E.CS<-N.E.CS%>%select("pedid", "seedtrt", "traitpkg", "herbtech")
+## North Full
+N.F.CS<-subset(CS, pedid %in% N.F.EL$pedid)
+N.F.CS<-N.F.CS%>%select("pedid", "seedtrt", "traitpkg", "herbtech")
+## CENTRAL
+## Central Early
+C.E.CS<-subset(CS, pedid %in% C.E.EL$pedid)
+C.E.CS<-C.E.CS%>%select("pedid", "seedtrt", "traitpkg", "herbtech")
+## Central Full
+C.F.CS<-subset(CS, pedid %in% C.F.EL$pedid)
+C.F.CS<-C.F.CS%>%select("pedid", "seedtrt", "traitpkg", "herbtech")
+## SOUTH
+## South Early
+S.E.CS<-subset(CS, pedid %in% S.E.EL$pedid)
+S.E.CS<-S.E.CS%>%select("pedid", "seedtrt", "traitpkg", "herbtech")
+## South Full
+S.F.CS<-subset(CS, pedid %in% S.F.EL$pedid)
+S.F.CS<-S.F.CS%>%select("pedid", "seedtrt", "traitpkg", "herbtech")
+```
+
+# Combine EL & CS
+
+```{r CS_EL_COMBO, echo=FALSE, comment=NA, message=FALSE}
+## Combine Cold Storage & Entry Lists
+## NORTH
+N.E.Combo<-left_join(N.E.EL, N.E.CS)
+N.F.Combo<-left_join(N.F.EL, N.F.CS)
+## CENTRAL
+C.E.Combo<-left_join(C.E.EL, C.E.CS)
+C.F.Combo<-left_join(C.F.EL, C.F.CS)
+## SOUTH
+S.E.Combo<-left_join(S.E.EL, S.E.CS)
+S.F.Combo<-left_join(S.F.EL, S.F.CS)
+
+## Set "Entry" as Factors:
+## NORTH
+N.E.Combo$entry<-factor(N.E.Combo$entry)
+N.F.Combo$entry<-factor(N.F.Combo$entry)
+## CENTRAL
+C.E.Combo$entry<-factor(C.E.Combo$entry)
+C.F.Combo$entry<-factor(C.F.Combo$entry)
+## SOUTH
+S.E.Combo$entry<-factor(S.E.Combo$entry)
+S.F.Combo$entry<-factor(S.F.Combo$entry)
+```
+
+# District Data:
+
+```{r District_Data_Import, echo=FALSE, comment=NA, message=FALSE}
+## ALLYearly District Data:
+district.all<-read.csv(c(params$data),header=T,na.strings=c("", " ", "NA"))
+## Add Yield Values::
+district.all<-district.all%>%mutate(yld = (wt*CCF*(100-moist)/84.5))
+
+## North::
+NE<-filter(district.all, exp==paste("C", c(YR), "1A", sep=""))
+NF<-filter(district.all, exp==paste("C", c(YR), "1B", sep=""))
+## Central::
+CE<-filter(district.all, exp==paste("C", c(YR), "2A", sep=""))
+CF<-filter(district.all, exp==paste("C", c(YR), "2B", sep=""))
+## South::
+SE<-filter(district.all, exp==paste("C", c(YR), "3A", sep=""))
+SF<-filter(district.all, exp==paste("C", c(YR), "3B", sep=""))
+```
+
+
+# Single Location Data:
+
+## North (1) Early (A)
+
+```{r North_Early_Single_Data, echo=FALSE, comment=NA, message=FALSE}
+## NORTH EARLY:
+## Location 3 NOT Included:
+NE.F1<-filter(district.all, book.name==paste("CF", c(YR), "11", sep="") & exp==paste("C", c(YR), "1A", sep=""))
+NE.F2<-filter(district.all, book.name==paste("CF", c(YR), "12", sep="") & exp==paste("C", c(YR), "1A", sep=""))
+# NE.F3<-filter(district.all, book.name==paste("CF", c(YR), "13", sep="") & exp==paste("C", c(YR), "1A", sep=""))
+NE.F4<-filter(district.all, book.name==paste("CF", c(YR), "14", sep="") & exp==paste("C", c(YR), "1A", sep=""))
+NE.F5<-filter(district.all, book.name==paste("CF", c(YR), "15", sep="") & exp==paste("C", c(YR), "1A", sep=""))
+```
+
+## North (1) Full (B)
+
+```{r North_Full_Single_Data, echo=FALSE, comment=NA, message=FALSE}
+## NORTH FULL:
+## Location 3 NOT Included:
+NF.F1<-filter(district.all, book.name==paste("CF", c(YR), "11", sep="") & exp==paste("C", c(YR), "1B", sep=""))
+NF.F2<-filter(district.all, book.name==paste("CF", c(YR), "12", sep="") & exp==paste("C", c(YR), "1B", sep=""))
+# NF.F3<-filter(district.all, book.name==paste("CF", c(YR), "13", sep="") & exp==paste("C", c(YR), "1B", sep=""))
+NF.F4<-filter(district.all, book.name==paste("CF", c(YR), "14", sep="") & exp==paste("C", c(YR), "1B", sep=""))
+NF.F5<-filter(district.all, book.name==paste("CF", c(YR), "15", sep="") & exp==paste("C", c(YR), "1B", sep=""))
+```
+
+## Central (2) Early (A)
+
+```{r Central_Early_Single_Data, echo=FALSE, comment=NA, message=FALSE}
+## CENTRAL EARLY:
+## Location 1 NOT Included:
+# CE.F1<-filter(district.all, book.name==paste("CF", c(YR), "21", sep="") & exp==paste("C", c(YR), "2A", sep=""))
+CE.F2<-filter(district.all, book.name==paste("CF", c(YR), "22", sep="") & exp==paste("C", c(YR), "2A", sep=""))
+CE.F3<-filter(district.all, book.name==paste("CF", c(YR), "23", sep="") & exp==paste("C", c(YR), "2A", sep=""))
+CE.F4<-filter(district.all, book.name==paste("CF", c(YR), "24", sep="") & exp==paste("C", c(YR), "2A", sep=""))
+CE.F5<-filter(district.all, book.name==paste("CF", c(YR), "25", sep="") & exp==paste("C", c(YR), "2A", sep=""))
+```
+
+## Central (2) Full (B)
+
+```{r Central_Full_Single_Data, echo=FALSE, comment=NA, message=FALSE}
+## CENTRAL FULL:
+## Location 1 NOT Included:
+# CF.F1<-filter(district.all, book.name==paste("CF", c(YR), "21", sep="") & exp==paste("C", c(YR), "2B", sep=""))
+CF.F2<-filter(district.all, book.name==paste("CF", c(YR), "22", sep="") & exp==paste("C", c(YR), "2B", sep=""))
+CF.F3<-filter(district.all, book.name==paste("CF", c(YR), "23", sep="") & exp==paste("C", c(YR), "2B", sep=""))
+CF.F4<-filter(district.all, book.name==paste("CF", c(YR), "24", sep="") & exp==paste("C", c(YR), "2B", sep=""))
+CF.F5<-filter(district.all, book.name==paste("CF", c(YR), "25", sep="") & exp==paste("C", c(YR), "2B", sep=""))
+```
+
+## South (3) Early (A)
+
+```{r South_Early_Single_Data, echo=FALSE, comment=NA, message=FALSE}
+## SOUTH EARLY:
+## Location 1 NOT Included:
+# SE.F1<-filter(district.all, book.name==paste("CF", c(YR), "31", sep="") & exp==paste("C", c(YR), "3A", sep=""))
+SE.F2<-filter(district.all, book.name==paste("CF", c(YR), "32", sep="") & exp==paste("C", c(YR), "3A", sep=""))
+SE.F3<-filter(district.all, book.name==paste("CF", c(YR), "33", sep="") & exp==paste("C", c(YR), "3A", sep=""))
+SE.F4<-filter(district.all, book.name==paste("CF", c(YR), "34", sep="") & exp==paste("C", c(YR), "3A", sep=""))
+SE.F5<-filter(district.all, book.name==paste("CF", c(YR), "35", sep="") & exp==paste("C", c(YR), "3A", sep=""))
+```
+
+## South (3) Full (B)
+
+```{r South_Full_Single_Data, echo=FALSE, comment=NA, message=FALSE}
+## SOUTH FULL:
+## Location 1 NOT Included:
+# SF.F1<-filter(district.all, book.name==paste("CF", c(YR), "31", sep="") & exp==paste("C", c(YR), "3B", sep=""))
+SF.F2<-filter(district.all, book.name==paste("CF", c(YR), "32", sep="") & exp==paste("C", c(YR), "3B", sep=""))
+SF.F3<-filter(district.all, book.name==paste("CF", c(YR), "33", sep="") & exp==paste("C", c(YR), "3B", sep=""))
+SF.F4<-filter(district.all, book.name==paste("CF", c(YR), "34", sep="") & exp==paste("C", c(YR), "3B", sep=""))
+SF.F5<-filter(district.all, book.name==paste("CF", c(YR), "35", sep="") & exp==paste("C", c(YR), "3B", sep=""))
+```
+
+
+# Single Location Factors
+
+```{r Set_Single_Loc_Factors, echo=FALSE, comment=NA, message=FALSE}
+## NORTH
+## Location 3 NOT Included:
+## North EARLY::
+NE.F1$book.name<-factor(NE.F1$book.name)
+NE.F1$exp<-factor(NE.F1$exp)
+NE.F1$entry<-factor(NE.F1$entry)
+NE.F1$ped.id<-factor(NE.F1$ped.id)
+NE.F1$code<-factor(NE.F1$code)
+NE.F1$rng<-factor(NE.F1$rng)
+NE.F1$pass<-factor(NE.F1$pass)
+NE.F1$rep<-factor(NE.F1$rep)
+NE.F2$book.name<-factor(NE.F2$book.name)
+NE.F2$exp<-factor(NE.F2$exp)
+NE.F2$entry<-factor(NE.F2$entry)
+NE.F2$ped.id<-factor(NE.F2$ped.id)
+NE.F2$code<-factor(NE.F2$code)
+NE.F2$rng<-factor(NE.F2$rng)
+NE.F2$pass<-factor(NE.F2$pass)
+NE.F2$rep<-factor(NE.F2$rep)
+# NE.F3$book.name<-factor(NE.F3$book.name)
+# NE.F3$exp<-factor(NE.F3$exp)
+# NE.F3$entry<-factor(NE.F3$entry)
+# NE.F3$ped.id<-factor(NE.F3$ped.id)
+# NE.F3$code<-factor(NE.F3$code)
+# NE.F3$rng<-factor(NE.F3$rng)
+# NE.F3$pass<-factor(NE.F3$pass)
+# NE.F3$rep<-factor(NE.F3$rep)
+NE.F4$book.name<-factor(NE.F4$book.name)
+NE.F4$exp<-factor(NE.F4$exp)
+NE.F4$entry<-factor(NE.F4$entry)
+NE.F4$ped.id<-factor(NE.F4$ped.id)
+NE.F4$code<-factor(NE.F4$code)
+NE.F4$rng<-factor(NE.F4$rng)
+NE.F4$pass<-factor(NE.F4$pass)
+NE.F4$rep<-factor(NE.F4$rep)
+NE.F5$book.name<-factor(NE.F5$book.name)
+NE.F5$exp<-factor(NE.F5$exp)
+NE.F5$entry<-factor(NE.F5$entry)
+NE.F5$ped.id<-factor(NE.F5$ped.id)
+NE.F5$code<-factor(NE.F5$code)
+NE.F5$rng<-factor(NE.F5$rng)
+NE.F5$pass<-factor(NE.F5$pass)
+NE.F5$rep<-factor(NE.F5$rep)
+## North Full:
+NF.F1$book.name<-factor(NF.F1$book.name)
+NF.F1$exp<-factor(NF.F1$exp)
+NF.F1$entry<-factor(NF.F1$entry)
+NF.F1$ped.id<-factor(NF.F1$ped.id)
+NF.F1$code<-factor(NF.F1$code)
+NF.F1$rng<-factor(NF.F1$rng)
+NF.F1$pass<-factor(NF.F1$pass)
+NF.F1$rep<-factor(NF.F1$rep)
+NF.F2$book.name<-factor(NF.F2$book.name)
+NF.F2$exp<-factor(NF.F2$exp)
+NF.F2$entry<-factor(NF.F2$entry)
+NF.F2$ped.id<-factor(NF.F2$ped.id)
+NF.F2$code<-factor(NF.F2$code)
+NF.F2$rng<-factor(NF.F2$rng)
+NF.F2$pass<-factor(NF.F2$pass)
+NF.F2$rep<-factor(NF.F2$rep)
+# NF.F3$book.name<-factor(NF.F3$book.name)
+# NF.F3$exp<-factor(NF.F3$exp)
+# NF.F3$entry<-factor(NF.F3$entry)
+# NF.F3$ped.id<-factor(NF.F3$ped.id)
+# NF.F3$code<-factor(NF.F3$code)
+# NF.F3$rng<-factor(NF.F3$rng)
+# NF.F3$pass<-factor(NF.F3$pass)
+# NF.F3$rep<-factor(NF.F3$rep)
+NF.F4$book.name<-factor(NF.F4$book.name)
+NF.F4$exp<-factor(NF.F4$exp)
+NF.F4$entry<-factor(NF.F4$entry)
+NF.F4$ped.id<-factor(NF.F4$ped.id)
+NF.F4$code<-factor(NF.F4$code)
+NF.F4$rng<-factor(NF.F4$rng)
+NF.F4$pass<-factor(NF.F4$pass)
+NF.F4$rep<-factor(NF.F4$rep)
+NF.F5$book.name<-factor(NF.F5$book.name)
+NF.F5$exp<-factor(NF.F5$exp)
+NF.F5$entry<-factor(NF.F5$entry)
+NF.F5$ped.id<-factor(NF.F5$ped.id)
+NF.F5$code<-factor(NF.F5$code)
+NF.F5$rng<-factor(NF.F5$rng)
+NF.F5$pass<-factor(NF.F5$pass)
+NF.F5$rep<-factor(NF.F5$rep)
+
+## CENTRAL
+## Location 1 NOT Included:
+## Central Early
+# CE.F1$book.name<-factor(CE.F1$book.name)
+# CE.F1$exp<-factor(CE.F1$exp)
+# CE.F1$entry<-factor(CE.F1$entry)
+# CE.F1$ped.id<-factor(CE.F1$ped.id)
+# CE.F1$code<-factor(CE.F1$code)
+# CE.F1$rng<-factor(CE.F1$rng)
+# CE.F1$pass<-factor(CE.F1$pass)
+# CE.F1$rep<-factor(CE.F1$rep)
+CE.F2$book.name<-factor(CE.F2$book.name)
+CE.F2$exp<-factor(CE.F2$exp)
+CE.F2$entry<-factor(CE.F2$entry)
+CE.F2$ped.id<-factor(CE.F2$ped.id)
+CE.F2$code<-factor(CE.F2$code)
+CE.F2$rng<-factor(CE.F2$rng)
+CE.F2$pass<-factor(CE.F2$pass)
+CE.F2$rep<-factor(CE.F2$rep)
+CE.F3$book.name<-factor(CE.F3$book.name)
+CE.F3$exp<-factor(CE.F3$exp)
+CE.F3$entry<-factor(CE.F3$entry)
+CE.F3$ped.id<-factor(CE.F3$ped.id)
+CE.F3$code<-factor(CE.F3$code)
+CE.F3$rng<-factor(CE.F3$rng)
+CE.F3$pass<-factor(CE.F3$pass)
+CE.F3$rep<-factor(CE.F3$rep)
+CE.F4$book.name<-factor(CE.F4$book.name)
+CE.F4$exp<-factor(CE.F4$exp)
+CE.F4$entry<-factor(CE.F4$entry)
+CE.F4$ped.id<-factor(CE.F4$ped.id)
+CE.F4$code<-factor(CE.F4$code)
+CE.F4$rng<-factor(CE.F4$rng)
+CE.F4$pass<-factor(CE.F4$pass)
+CE.F4$rep<-factor(CE.F4$rep)
+CE.F5$book.name<-factor(CE.F5$book.name)
+CE.F5$exp<-factor(CE.F5$exp)
+CE.F5$entry<-factor(CE.F5$entry)
+CE.F5$ped.id<-factor(CE.F5$ped.id)
+CE.F5$code<-factor(CE.F5$code)
+CE.F5$rng<-factor(CE.F5$rng)
+CE.F5$pass<-factor(CE.F5$pass)
+CE.F5$rep<-factor(CE.F5$rep)
+## Central Full
+# CF.F1$book.name<-factor(CF.F1$book.name)
+# CF.F1$exp<-factor(CF.F1$exp)
+# CF.F1$entry<-factor(CF.F1$entry)
+# CF.F1$ped.id<-factor(CF.F1$ped.id)
+# CF.F1$code<-factor(CF.F1$code)
+# CF.F1$rng<-factor(CF.F1$rng)
+# CF.F1$pass<-factor(CF.F1$pass)
+# CF.F1$rep<-factor(CF.F1$rep)
+CF.F2$book.name<-factor(CF.F2$book.name)
+CF.F2$exp<-factor(CF.F2$exp)
+CF.F2$entry<-factor(CF.F2$entry)
+CF.F2$ped.id<-factor(CF.F2$ped.id)
+CF.F2$code<-factor(CF.F2$code)
+CF.F2$rng<-factor(CF.F2$rng)
+CF.F2$pass<-factor(CF.F2$pass)
+CF.F2$rep<-factor(CF.F2$rep)
+CF.F3$book.name<-factor(CF.F3$book.name)
+CF.F3$exp<-factor(CF.F3$exp)
+CF.F3$entry<-factor(CF.F3$entry)
+CF.F3$ped.id<-factor(CF.F3$ped.id)
+CF.F3$code<-factor(CF.F3$code)
+CF.F3$rng<-factor(CF.F3$rng)
+CF.F3$pass<-factor(CF.F3$pass)
+CF.F3$rep<-factor(CF.F3$rep)
+CF.F4$book.name<-factor(CF.F4$book.name)
+CF.F4$exp<-factor(CF.F4$exp)
+CF.F4$entry<-factor(CF.F4$entry)
+CF.F4$ped.id<-factor(CF.F4$ped.id)
+CF.F4$code<-factor(CF.F4$code)
+CF.F4$rng<-factor(CF.F4$rng)
+CF.F4$pass<-factor(CF.F4$pass)
+CF.F4$rep<-factor(CF.F4$rep)
+CF.F5$book.name<-factor(CF.F5$book.name)
+CF.F5$exp<-factor(CF.F5$exp)
+CF.F5$entry<-factor(CF.F5$entry)
+CF.F5$ped.id<-factor(CF.F5$ped.id)
+CF.F5$code<-factor(CF.F5$code)
+CF.F5$rng<-factor(CF.F5$rng)
+CF.F5$pass<-factor(CF.F5$pass)
+CF.F5$rep<-factor(CF.F5$rep)
+
+## SOUTH
+## Location 1 NOT Included:
+## South Early
+# SE.F1$book.name<-factor(SE.F1$book.name)
+# SE.F1$exp<-factor(SE.F1$exp)
+# SE.F1$entry<-factor(SE.F1$entry)
+# SE.F1$ped.id<-factor(SE.F1$ped.id)
+# SE.F1$code<-factor(SE.F1$code)
+# SE.F1$rng<-factor(SE.F1$rng)
+# SE.F1$pass<-factor(SE.F1$pass)
+# SE.F1$rep<-factor(SE.F1$rep)
+SE.F2$book.name<-factor(SE.F2$book.name)
+SE.F2$exp<-factor(SE.F2$exp)
+SE.F2$entry<-factor(SE.F2$entry)
+SE.F2$ped.id<-factor(SE.F2$ped.id)
+SE.F2$code<-factor(SE.F2$code)
+SE.F2$rng<-factor(SE.F2$rng)
+SE.F2$pass<-factor(SE.F2$pass)
+SE.F2$rep<-factor(SE.F2$rep)
+SE.F3$book.name<-factor(SE.F3$book.name)
+SE.F3$exp<-factor(SE.F3$exp)
+SE.F3$entry<-factor(SE.F3$entry)
+SE.F3$ped.id<-factor(SE.F3$ped.id)
+SE.F3$code<-factor(SE.F3$code)
+SE.F3$rng<-factor(SE.F3$rng)
+SE.F3$pass<-factor(SE.F3$pass)
+SE.F3$rep<-factor(SE.F3$rep)
+SE.F4$book.name<-factor(SE.F4$book.name)
+SE.F4$exp<-factor(SE.F4$exp)
+SE.F4$entry<-factor(SE.F4$entry)
+SE.F4$ped.id<-factor(SE.F4$ped.id)
+SE.F4$code<-factor(SE.F4$code)
+SE.F4$rng<-factor(SE.F4$rng)
+SE.F4$pass<-factor(SE.F4$pass)
+SE.F4$rep<-factor(SE.F4$rep)
+SE.F5$book.name<-factor(SE.F5$book.name)
+SE.F5$exp<-factor(SE.F5$exp)
+SE.F5$entry<-factor(SE.F5$entry)
+SE.F5$ped.id<-factor(SE.F5$ped.id)
+SE.F5$code<-factor(SE.F5$code)
+SE.F5$rng<-factor(SE.F5$rng)
+SE.F5$pass<-factor(SE.F5$pass)
+SE.F5$rep<-factor(SE.F5$rep)
+## South Full
+# SF.F1$book.name<-factor(SF.F1$book.name)
+# SF.F1$exp<-factor(SF.F1$exp)
+# SF.F1$entry<-factor(SF.F1$entry)
+# SF.F1$ped.id<-factor(SF.F1$ped.id)
+# SF.F1$code<-factor(SF.F1$code)
+# SF.F1$rng<-factor(SF.F1$rng)
+# SF.F1$pass<-factor(SF.F1$pass)
+# SF.F1$rep<-factor(SF.F1$rep)
+SF.F2$book.name<-factor(SF.F2$book.name)
+SF.F2$exp<-factor(SF.F2$exp)
+SF.F2$entry<-factor(SF.F2$entry)
+SF.F2$ped.id<-factor(SF.F2$ped.id)
+SF.F2$code<-factor(SF.F2$code)
+SF.F2$rng<-factor(SF.F2$rng)
+SF.F2$pass<-factor(SF.F2$pass)
+SF.F2$rep<-factor(SF.F2$rep)
+SF.F3$book.name<-factor(SF.F3$book.name)
+SF.F3$exp<-factor(SF.F3$exp)
+SF.F3$entry<-factor(SF.F3$entry)
+SF.F3$ped.id<-factor(SF.F3$ped.id)
+SF.F3$code<-factor(SF.F3$code)
+SF.F3$rng<-factor(SF.F3$rng)
+SF.F3$pass<-factor(SF.F3$pass)
+SF.F3$rep<-factor(SF.F3$rep)
+SF.F4$book.name<-factor(SF.F4$book.name)
+SF.F4$exp<-factor(SF.F4$exp)
+SF.F4$entry<-factor(SF.F4$entry)
+SF.F4$ped.id<-factor(SF.F4$ped.id)
+SF.F4$code<-factor(SF.F4$code)
+SF.F4$rng<-factor(SF.F4$rng)
+SF.F4$pass<-factor(SF.F4$pass)
+SF.F4$rep<-factor(SF.F4$rep)
+SF.F5$book.name<-factor(SF.F5$book.name)
+SF.F5$exp<-factor(SF.F5$exp)
+SF.F5$entry<-factor(SF.F5$entry)
+SF.F5$ped.id<-factor(SF.F5$ped.id)
+SF.F5$code<-factor(SF.F5$code)
+SF.F5$rng<-factor(SF.F5$rng)
+SF.F5$pass<-factor(SF.F5$pass)
+SF.F5$rep<-factor(SF.F5$rep)
+```
+
+
+# Single Location Models
+
+## North (1) Early (A)
+
+``` {r North_Early_Models, echo=FALSE, comment=NA, message=FALSE}
+## NORTH EARLY
+## Location 3 NOT Included:
+NE.model1<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F1, REML=TRUE)
+NE.model2<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F2, REML=TRUE)
+# NE.model3<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F3, REML=TRUE)
+NE.model4<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F4, REML=TRUE)
+NE.model5<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F5, REML=TRUE)
+```
+
+## North (1) Full (B)
+
+``` {r North_Full_Models, echo=FALSE, comment=NA, message=FALSE}
+## NORTH FULL
+## Location 3 NOT Included:
+NF.model1<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F1, REML=TRUE)
+NF.model2<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F2, REML=TRUE)
+# NF.model3<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F3, REML=TRUE)
+NF.model4<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F4, REML=TRUE)
+NF.model5<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F5, REML=TRUE)
+```
+
+## Central (2) Early (A)
+
+```{r Central_Early_Models, echo=FALSE, comment=NA, message=FALSE}
+## CENTRAL EARLY
+## Location 1 NOT Included:
+# CE.model1<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F1, REML=TRUE)
+CE.model2<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F2, REML=TRUE)
+CE.model3<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F3, REML=TRUE)
+CE.model4<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F4, REML=TRUE)
+CE.model5<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F5, REML=TRUE)
+```
+
+## Central (2) Full (B)
+
+```{r Central_Full_Models, echo=FALSE, comment=NA, message=FALSE}
+## CENTRAL FULL
+## Location 1 NOT Included:
+# CF.model1<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F1, REML=TRUE)
+CF.model2<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F2, REML=TRUE)
+CF.model3<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F3, REML=TRUE)
+CF.model4<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F4, REML=TRUE)
+CF.model5<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F5, REML=TRUE)
+```
+
+## South (3) Early (A)
+
+```{r South_Models, echo=FALSE, comment=NA, message=FALSE}
+## SOUTH EARLY
+## Location 1 NOT Included:
+# SE.model1<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F1, REML=TRUE)
+SE.model2<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F2, REML=TRUE)
+SE.model3<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F3, REML=TRUE)
+SE.model4<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F4, REML=TRUE)
+SE.model5<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F5, REML=TRUE)
+```
+
+## South (3) Full (B)
+
+```{r South_Full_Models, echo=FALSE, comment=NA, message=FALSE}
+## SOUTH FULL
+## Location 1 NOT Included:
+# SF.model1<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F1, REML=TRUE)
+SF.model2<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F2, REML=TRUE)
+SF.model3<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F3, REML=TRUE)
+SF.model4<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F4, REML=TRUE)
+SF.model5<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F5, REML=TRUE)
+```
+
+
+
+# Single Location LS-Means (LSMs)
+
+## North (1) Early (A)
+
+```{r North.Single_Location_LSMs, echo=FALSE, comment=NA, message=FALSE}
+## NORTH EARLY
+## Location 3 NOT Included:
+N.E.LSM1<-as.data.frame(emmeans(NE.model1, spec="entry"))
+N.E.LSM1<-N.E.LSM1%>%select(entry, emmean)
+names(N.E.LSM1)[2]<-c("F1")
+N.E.LSM2<-as.data.frame(emmeans(NE.model2, spec="entry"))
+N.E.LSM2<-N.E.LSM2%>%select(entry, emmean)
+names(N.E.LSM2)[2]<-c("F2")
+# N.E.LSM3<-as.data.frame(emmeans(NE.model3, spec="entry"))
+# N.E.LSM3<-N.E.LSM3%>%select(entry, emmean)
+# names(N.E.LSM3)[2]<-c("F3")
+N.E.LSM4<-as.data.frame(emmeans(NE.model4, spec="entry"))
+N.E.LSM4<-N.E.LSM4%>%select(entry, emmean)
+names(N.E.LSM4)[2]<-c("F4")
+N.E.LSM5<-as.data.frame(emmeans(NE.model5, spec="entry"))
+N.E.LSM5<-N.E.LSM5%>%select(entry, emmean)
+names(N.E.LSM5)[2]<-c("F5")
+```
+
+## North (1) Full (B)
+
+```{r North.Full.Single_Location_LSMs, echo=FALSE, comment=NA, message=FALSE}
+## NORTH FULL
+## Location 3 NOT Included:
+N.F.LSM1<-as.data.frame(emmeans(NF.model1, spec="entry"))
+N.F.LSM1<-N.F.LSM1%>%select(entry, emmean)
+names(N.F.LSM1)[2]<-c("F1")
+N.F.LSM2<-as.data.frame(emmeans(NF.model2, spec="entry"))
+N.F.LSM2<-N.F.LSM2%>%select(entry, emmean)
+names(N.F.LSM2)[2]<-c("F2")
+# N.F.LSM3<-as.data.frame(emmeans(NF.model3, spec="entry"))
+# N.F.LSM3<-N.F.LSM3%>%select(entry, emmean)
+# names(N.F.LSM3)[2]<-c("F3")
+N.F.LSM4<-as.data.frame(emmeans(NF.model4, spec="entry"))
+N.F.LSM4<-N.F.LSM4%>%select(entry, emmean)
+names(N.F.LSM4)[2]<-c("F4")
+N.F.LSM5<-as.data.frame(emmeans(NF.model5, spec="entry"))
+N.F.LSM5<-N.F.LSM5%>%select(entry, emmean)
+names(N.F.LSM5)[2]<-c("F5")
+```
+
+## Central (2) Early (A)
+
+```{r Central. Early.Single_Location_LSMs, echo=FALSE, comment=NA, message=FALSE}
+## CENTRAL EARLY
+## Location 1 NOT Included:
+# C.E.LSM1<-as.data.frame(emmeans(CE.model1, spec="entry"))
+# C.E.LSM1<-C.E.LSM1%>%select(entry, emmean)
+# names(C.E.LSM1)[2]<-c("F1")
+C.E.LSM2<-as.data.frame(emmeans(CE.model2, spec="entry"))
+C.E.LSM2<-C.E.LSM2%>%select(entry, emmean)
+names(C.E.LSM2)[2]<-c("F2")
+C.E.LSM3<-as.data.frame(emmeans(CE.model3, spec="entry"))
+C.E.LSM3<-C.E.LSM3%>%select(entry, emmean)
+names(C.E.LSM3)[2]<-c("F3")
+C.E.LSM4<-as.data.frame(emmeans(CE.model4, spec="entry"))
+C.E.LSM4<-C.E.LSM4%>%select(entry, emmean)
+names(C.E.LSM4)[2]<-c("F4")
+C.E.LSM5<-as.data.frame(emmeans(CE.model5, spec="entry"))
+C.E.LSM5<-C.E.LSM5%>%select(entry, emmean)
+names(C.E.LSM5)[2]<-c("F5")
+```
+
+## Central (2) Full (B)
+
+```{r Central.Full.Single_Location_LSMs, echo=FALSE, comment=NA, message=FALSE}
+## CENTRAL FULL
+## Location 1 NOT Included:
+# C.F.LSM1<-as.data.frame(emmeans(CF.model1, spec="entry"))
+# C.F.LSM1<-C.F.LSM1%>%select(entry, emmean)
+# names(C.F.LSM1)[2]<-c("F1")
+C.F.LSM2<-as.data.frame(emmeans(CF.model2, spec="entry"))
+C.F.LSM2<-C.F.LSM2%>%select(entry, emmean)
+names(C.F.LSM2)[2]<-c("F2")
+C.F.LSM3<-as.data.frame(emmeans(CF.model3, spec="entry"))
+C.F.LSM3<-C.F.LSM3%>%select(entry, emmean)
+names(C.F.LSM3)[2]<-c("F3")
+C.F.LSM4<-as.data.frame(emmeans(CF.model4, spec="entry"))
+C.F.LSM4<-C.F.LSM4%>%select(entry, emmean)
+names(C.F.LSM4)[2]<-c("F4")
+C.F.LSM5<-as.data.frame(emmeans(CF.model5, spec="entry"))
+C.F.LSM5<-C.F.LSM5%>%select(entry, emmean)
+names(C.F.LSM5)[2]<-c("F5")
+```
+
+## South (3) Early (A)
+
+```{r South.Early.Single_Location_LSMs, echo=FALSE, comment=NA, message=FALSE}
+## SOUTH EARLY
+## Location 1 NOT Included:
+# S.E.LSM1<-as.data.frame(emmeans(SE.model1, spec="entry"))
+# S.E.LSM1<-S.E.LSM1%>%select(entry, emmean)
+# names(S.E.LSM1)[2]<-c("F1")
+S.E.LSM2<-as.data.frame(emmeans(SE.model2, spec="entry"))
+S.E.LSM2<-S.E.LSM2%>%select(entry, emmean)
+names(S.E.LSM2)[2]<-c("F2")
+S.E.LSM3<-as.data.frame(emmeans(SE.model3, spec="entry"))
+S.E.LSM3<-S.E.LSM3%>%select(entry, emmean)
+names(S.E.LSM3)[2]<-c("F3")
+S.E.LSM4<-as.data.frame(emmeans(SE.model4, spec="entry"))
+S.E.LSM4<-S.E.LSM4%>%select(entry, emmean)
+names(S.E.LSM4)[2]<-c("F4")
+S.E.LSM5<-as.data.frame(emmeans(SE.model5, spec="entry"))
+S.E.LSM5<-S.E.LSM5%>%select(entry, emmean)
+names(S.E.LSM5)[2]<-c("F5")
+```
+
+## South (3) Full (B)
+
+```{r South.Full.Single_Location_LSMs, echo=FALSE, comment=NA, message=FALSE}
+## SOUTH FULL
+## Location 1 NOT Included:
+# S.F.LSM1<-as.data.frame(emmeans(SF.model1, spec="entry"))
+# S.F.LSM1<-S.F.LSM1%>%select(entry, emmean)
+# names(S.F.LSM1)[2]<-c("F1")
+S.F.LSM2<-as.data.frame(emmeans(SF.model2, spec="entry"))
+S.F.LSM2<-S.F.LSM2%>%select(entry, emmean)
+names(S.F.LSM2)[2]<-c("F2")
+S.F.LSM3<-as.data.frame(emmeans(SF.model3, spec="entry"))
+S.F.LSM3<-S.F.LSM3%>%select(entry, emmean)
+names(S.F.LSM3)[2]<-c("F3")
+S.F.LSM4<-as.data.frame(emmeans(SF.model4, spec="entry"))
+S.F.LSM4<-S.F.LSM4%>%select(entry, emmean)
+names(S.F.LSM4)[2]<-c("F4")
+S.F.LSM5<-as.data.frame(emmeans(SF.model5, spec="entry"))
+S.F.LSM5<-S.F.LSM5%>%select(entry, emmean)
+names(S.F.LSM5)[2]<-c("F5")
+```
+
+# Yield Percent of Mean
+
+## Averages of LSMs
+
+```{r Mean_LSMs, echo=FALSE, comment=NA, message=FALSE}
+## Calculate means of LSMs
+## NORTH
+## North Early
+NE.ls.Mean1<-mean(N.E.LSM1$F1)
+NE.ls.Mean2<-mean(N.E.LSM2$F2)
+# NE.ls.Mean3<-mean(N.E.LSM3$F3)
+NE.ls.Mean4<-mean(N.E.LSM4$F4)
+NE.ls.Mean5<-mean(N.E.LSM5$F5)
+## North Full
+NF.ls.Mean1<-mean(N.F.LSM1$F1)
+NF.ls.Mean2<-mean(N.F.LSM2$F2)
+# NF.ls.Mean3<-mean(N.F.LSM3$F3)
+NF.ls.Mean4<-mean(N.F.LSM4$F4)
+NF.ls.Mean5<-mean(N.F.LSM5$F5)
+
+## CENTRAL
+## Central Early
+# CE.ls.Mean1<-mean(C.E.LSM1$F1)
+CE.ls.Mean2<-mean(C.E.LSM2$F2)
+CE.ls.Mean3<-mean(C.E.LSM3$F3)
+CE.ls.Mean4<-mean(C.E.LSM4$F4)
+CE.ls.Mean5<-mean(C.E.LSM5$F5)
+## Central Full
+# CF.ls.Mean1<-mean(C.F.LSM1$F1)
+CF.ls.Mean2<-mean(C.F.LSM2$F2)
+CF.ls.Mean3<-mean(C.F.LSM3$F3)
+CF.ls.Mean4<-mean(C.F.LSM4$F4)
+CF.ls.Mean5<-mean(C.F.LSM5$F5)
+
+## SOUTH
+## South Early
+# SE.ls.Mean1<-mean(S.E.LSM1$F1)
+SE.ls.Mean2<-mean(S.E.LSM2$F2)
+SE.ls.Mean3<-mean(S.E.LSM3$F3)
+SE.ls.Mean4<-mean(S.E.LSM4$F4)
+SE.ls.Mean5<-mean(S.E.LSM5$F5)
+## South Full
+# SF.ls.Mean1<-mean(S.F.LSM1$F1)
+SF.ls.Mean2<-mean(S.F.LSM2$F2)
+SF.ls.Mean3<-mean(S.F.LSM3$F3)
+SF.ls.Mean4<-mean(S.F.LSM4$F4)
+SF.ls.Mean5<-mean(S.F.LSM5$F5)
+```
+
+## Create Percent Yield Column
+
+### North (1)
+
+```{r North_Percent_Yields, comment=NA, echo=FALSE, message=FALSE}
+## Create new column with percent of yield mean
+## NORTH
+## North Early
+N.E.LSM1<-N.E.LSM1%>%mutate(percent.yield = ((F1/NE.ls.Mean1)*100))
+N.E.LSM2<-N.E.LSM2%>%mutate(percent.yield = ((F2/NE.ls.Mean2)*100))
+# N.E.LSM3<-N.E.LSM3%>%mutate(percent.yield = ((F3/NE.ls.Mean3)*100))
+N.E.LSM4<-N.E.LSM4%>%mutate(percent.yield = ((F4/NE.ls.Mean4)*100))
+N.E.LSM5<-N.E.LSM5%>%mutate(percent.yield = ((F5/NE.ls.Mean5)*100))
+## North Full
+N.F.LSM1<-N.F.LSM1%>%mutate(percent.yield = ((F1/NF.ls.Mean1)*100))
+N.F.LSM2<-N.F.LSM2%>%mutate(percent.yield = ((F2/NF.ls.Mean2)*100))
+# N.F.LSM3<-N.F.LSM3%>%mutate(percent.yield = ((F3/NF.ls.Mean3)*100))
+N.F.LSM4<-N.F.LSM4%>%mutate(percent.yield = ((F4/NF.ls.Mean4)*100))
+N.F.LSM5<-N.F.LSM5%>%mutate(percent.yield = ((F5/NF.ls.Mean5)*100))
+```
+
+### Central (2)
+
+```{r Central_Percent_Yields, comment=NA, echo=FALSE, message=FALSE}
+## CENTRAL
+## Central Early
+# C.E.LSM1<-C.E.LSM1%>%mutate(percent.yield = ((F1/CE.ls.Mean1)*100))
+C.E.LSM2<-C.E.LSM2%>%mutate(percent.yield = ((F2/CE.ls.Mean2)*100))
+C.E.LSM3<-C.E.LSM3%>%mutate(percent.yield = ((F3/CE.ls.Mean3)*100))
+C.E.LSM4<-C.E.LSM4%>%mutate(percent.yield = ((F4/CE.ls.Mean4)*100))
+C.E.LSM5<-C.E.LSM5%>%mutate(percent.yield = ((F5/CE.ls.Mean5)*100))
+## Central Full
+# C.F.LSM1<-C.F.LSM1%>%mutate(percent.yield = ((F1/CF.ls.Mean1)*100))
+C.F.LSM2<-C.F.LSM2%>%mutate(percent.yield = ((F2/CF.ls.Mean2)*100))
+C.F.LSM3<-C.F.LSM3%>%mutate(percent.yield = ((F3/CF.ls.Mean3)*100))
+C.F.LSM4<-C.F.LSM4%>%mutate(percent.yield = ((F4/CF.ls.Mean4)*100))
+C.F.LSM5<-C.F.LSM5%>%mutate(percent.yield = ((F5/CF.ls.Mean5)*100))
+```
+
+### South (3)
+
+```{r South_Percent_Yields, comment=NA, echo=FALSE, message=FALSE}
+## SOUTH
+## South Early
+# S.E.LSM1<-S.E.LSM1%>%mutate(percent.yield = ((F1/SE.ls.Mean1)*100))
+S.E.LSM2<-S.E.LSM2%>%mutate(percent.yield = ((F2/SE.ls.Mean2)*100))
+S.E.LSM3<-S.E.LSM3%>%mutate(percent.yield = ((F3/SE.ls.Mean3)*100))
+S.E.LSM4<-S.E.LSM4%>%mutate(percent.yield = ((F4/SE.ls.Mean4)*100))
+S.E.LSM5<-S.E.LSM5%>%mutate(percent.yield = ((F5/SE.ls.Mean5)*100))
+## South Full
+# S.F.LSM1<-S.F.LSM1%>%mutate(percent.yield = ((F1/SF.ls.Mean1)*100))
+S.F.LSM2<-S.F.LSM2%>%mutate(percent.yield = ((F2/SF.ls.Mean2)*100))
+S.F.LSM3<-S.F.LSM3%>%mutate(percent.yield = ((F3/SF.ls.Mean3)*100))
+S.F.LSM4<-S.F.LSM4%>%mutate(percent.yield = ((F4/SF.ls.Mean4)*100))
+S.F.LSM5<-S.F.LSM5%>%mutate(percent.yield = ((F5/SF.ls.Mean5)*100))
+```
+
+
+# Set LSMs Entry as Factors 
+
+```{r LSM_Factors, echo=FALSE, comment=NA, message=FALSE}
+## Set "Entry" as Factors:
+## NORTH
+## North Early
+N.E.LSM1$entry<-factor(N.E.LSM1$entry)
+N.E.LSM2$entry<-factor(N.E.LSM2$entry)
+# N.E.LSM3$entry<-factor(N.E.LSM3$entry)
+N.E.LSM4$entry<-factor(N.E.LSM4$entry)
+N.E.LSM5$entry<-factor(N.E.LSM5$entry)
+## North Full
+N.F.LSM1$entry<-factor(N.F.LSM1$entry)
+N.F.LSM2$entry<-factor(N.F.LSM2$entry)
+# N.F.LSM3$entry<-factor(N.F.LSM3$entry)
+N.F.LSM4$entry<-factor(N.F.LSM4$entry)
+N.F.LSM5$entry<-factor(N.F.LSM5$entry)
+## CENTRAL
+## Central Early
+# C.E.LSM1$entry<-factor(C.E.LSM1$entry)
+C.E.LSM2$entry<-factor(C.E.LSM2$entry)
+C.E.LSM3$entry<-factor(C.E.LSM3$entry)
+C.E.LSM4$entry<-factor(C.E.LSM4$entry)
+C.E.LSM5$entry<-factor(C.E.LSM5$entry)
+## Central Full
+# C.F.LSM1$entry<-factor(C.F.LSM1$entry)
+C.F.LSM2$entry<-factor(C.F.LSM2$entry)
+C.F.LSM3$entry<-factor(C.F.LSM3$entry)
+C.F.LSM4$entry<-factor(C.F.LSM4$entry)
+C.F.LSM5$entry<-factor(C.F.LSM5$entry)
+## SOUTH
+## South Early
+# S.E.LSM1$entry<-factor(S.E.LSM1$entry)
+S.E.LSM2$entry<-factor(S.E.LSM2$entry)
+S.E.LSM3$entry<-factor(S.E.LSM3$entry)
+S.E.LSM4$entry<-factor(S.E.LSM4$entry)
+S.E.LSM5$entry<-factor(S.E.LSM5$entry)
+## South Full
+# S.F.LSM1$entry<-factor(S.F.LSM1$entry)
+S.F.LSM2$entry<-factor(S.F.LSM2$entry)
+S.F.LSM3$entry<-factor(S.F.LSM3$entry)
+S.F.LSM4$entry<-factor(S.F.LSM4$entry)
+S.F.LSM5$entry<-factor(S.F.LSM5$entry)
+```
+
+# Combine IDs & LSMs 
+
+## North (1)
+
+```{r North_Combine_ID_LSM, echo=FALSE, comment=NA, message=FALSE}
+## Combine LSMs with Entry ID
+## NORTH
+## North Early
+NE.11<-left_join(N.E.Combo, N.E.LSM1)
+NE.12<-left_join(N.E.Combo, N.E.LSM2)
+# NE.13<-left_join(N.E.Combo, N.E.LSM3)
+NE.14<-left_join(N.E.Combo, N.E.LSM4)
+NE.15<-left_join(N.E.Combo, N.E.LSM5)
+## North Full
+NF.11<-left_join(N.F.Combo, N.F.LSM1)
+NF.12<-left_join(N.F.Combo, N.F.LSM2)
+# NF.13<-left_join(N.F.Combo, N.F.LSM3)
+NF.14<-left_join(N.F.Combo, N.F.LSM4)
+NF.15<-left_join(N.F.Combo, N.F.LSM5)
+```
+
+## Central (2)
+
+```{r Central_Combine_ID_LSM, echo=FALSE, comment=NA, message=FALSE}
+## CENTRAL
+## Central Early
+# CE.21<-left_join(C.E.Combo, C.E.LSM1)
+CE.22<-left_join(C.E.Combo, C.E.LSM2)
+CE.23<-left_join(C.E.Combo, C.E.LSM3)
+CE.24<-left_join(C.E.Combo, C.E.LSM4)
+CE.25<-left_join(C.E.Combo, C.E.LSM5)
+## Central Full
+# CF.21<-left_join(C.F.Combo, C.F.LSM1)
+CF.22<-left_join(C.F.Combo, C.F.LSM2)
+CF.23<-left_join(C.F.Combo, C.F.LSM3)
+CF.24<-left_join(C.F.Combo, C.F.LSM4)
+CF.25<-left_join(C.F.Combo, C.F.LSM5)
+```
+
+## South (3)
+
+```{r South_Combine_ID_LSM, echo=FALSE, comment=NA, message=FALSE}
+## SOUTH
+## South Early
+# SE.31<-left_join(S.E.Combo, S.E.LSM1)
+SE.32<-left_join(S.E.Combo, S.E.LSM2)
+SE.33<-left_join(S.E.Combo, S.E.LSM3)
+SE.34<-left_join(S.E.Combo, S.E.LSM4)
+SE.35<-left_join(S.E.Combo, S.E.LSM5)
+## South Full
+# SF.31<-left_join(S.F.Combo, S.F.LSM1)
+SF.32<-left_join(S.F.Combo, S.F.LSM2)
+SF.33<-left_join(S.F.Combo, S.F.LSM3)
+SF.34<-left_join(S.F.Combo, S.F.LSM4)
+SF.35<-left_join(S.F.Combo, S.F.LSM5)
+```
+
+
+# Add Rankings
+
+```{r Yield_Rankings, echo=FALSE, comment=NA, message=FALSE}
+## Add Ranking column
+## NORTH
+## North Early
+NE.11$yld.rank<-as.numeric(rank(-NE.11$F1))
+NE.12$yld.rank<-as.numeric(rank(-NE.12$F2))
+# NE.13$yld.rank<-as.numeric(rank(-NE.13$F3))
+NE.14$yld.rank<-as.numeric(rank(-NE.14$F4))
+NE.15$yld.rank<-as.numeric(rank(-NE.15$F5))
+## North Full
+NF.11$yld.rank<-as.numeric(rank(-NF.11$F1))
+NF.12$yld.rank<-as.numeric(rank(-NF.12$F2))
+# NF.13$yld.rank<-as.numeric(rank(-NF.13$F3))
+NF.14$yld.rank<-as.numeric(rank(-NF.14$F4))
+NF.15$yld.rank<-as.numeric(rank(-NF.15$F5))
+
+## CENTRAL
+## Central Early
+# CE.21$yld.rank<-as.numeric(rank(-CE.21$F1))
+CE.22$yld.rank<-as.numeric(rank(-CE.22$F2))
+CE.23$yld.rank<-as.numeric(rank(-CE.23$F3))
+CE.24$yld.rank<-as.numeric(rank(-CE.24$F4))
+CE.25$yld.rank<-as.numeric(rank(-CE.25$F5))
+## Central Full
+# CF.21$yld.rank<-as.numeric(rank(-CF.21$F1))
+CF.22$yld.rank<-as.numeric(rank(-CF.22$F2))
+CF.23$yld.rank<-as.numeric(rank(-CF.23$F3))
+CF.24$yld.rank<-as.numeric(rank(-CF.24$F4))
+CF.25$yld.rank<-as.numeric(rank(-CF.25$F5))
+
+## SOUTH
+## South Early
+# SE.31$yld.rank<-as.numeric(rank(-SE.31$F1))
+SE.32$yld.rank<-as.numeric(rank(-SE.32$F2))
+SE.33$yld.rank<-as.numeric(rank(-SE.33$F3))
+SE.34$yld.rank<-as.numeric(rank(-SE.34$F4))
+SE.35$yld.rank<-as.numeric(rank(-SE.35$F5))
+## South Full
+# SF.31$yld.rank<-as.numeric(rank(-SF.31$F1)
+SF.32$yld.rank<-as.numeric(rank(-SF.32$F2))
+SF.33$yld.rank<-as.numeric(rank(-SF.33$F3))
+SF.34$yld.rank<-as.numeric(rank(-SF.34$F4))
+SF.35$yld.rank<-as.numeric(rank(-SF.35$F5))
+```
+
+
+# Moisture Model & LSMs:
+
+## North (1) Early (A)
+
+```{r North_Early_Moisture, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## Mixed model for generating LS Means for MOISTURE:
+## NORTH EARLY
+### Field 11
+NE.model.moist1<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F1, REML=TRUE)
+NE.moist.LSM1<-as.data.frame(emmeans(NE.model.moist1, spec="entry"))
+NE.moist.LSM1<-NE.moist.LSM1%>%select(entry, emmean)
+names(NE.moist.LSM1)[2]<-c("moist")
+### Field 12
+NE.model.moist2<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F2, REML=TRUE)
+NE.moist.LSM2<-as.data.frame(emmeans(NE.model.moist2, spec="entry"))
+NE.moist.LSM2<-NE.moist.LSM2%>%select(entry, emmean)
+names(NE.moist.LSM2)[2]<-c("moist")
+### Field 13
+# NE.model.moist3<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F3, REML=TRUE)
+# NE.moist.LSM3<-as.data.frame(emmeans(NE.model.moist3, spec="entry"))
+# NE.moist.LSM3<-NE.moist.LSM3%>%select(entry, emmean)
+# names(NE.moist.LSM3)[2]<-c("moist")
+### Field 14
+NE.model.moist4<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F4, REML=TRUE)
+NE.moist.LSM4<-as.data.frame(emmeans(NE.model.moist4, spec="entry"))
+NE.moist.LSM4<-NE.moist.LSM4%>%select(entry, emmean)
+names(NE.moist.LSM4)[2]<-c("moist")
+### Field 15
+NE.model.moist5<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F5, REML=TRUE)
+NE.moist.LSM5<-as.data.frame(emmeans(NE.model.moist5, spec="entry"))
+NE.moist.LSM5<-NE.moist.LSM5%>%select(entry, emmean)
+names(NE.moist.LSM5)[2]<-c("moist")
+```
+
+## North (1) Full (B)
+
+```{r North_Full_Moisture, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## NORTH FULL
+### Field 11
+NF.model.moist1<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F1, REML=TRUE)
+NF.moist.LSM1<-as.data.frame(emmeans(NF.model.moist1, spec="entry"))
+NF.moist.LSM1<-NF.moist.LSM1%>%select(entry, emmean)
+names(NF.moist.LSM1)[2]<-c("moist")
+### Field 12
+NF.model.moist2<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F2, REML=TRUE)
+NF.moist.LSM2<-as.data.frame(emmeans(NF.model.moist2, spec="entry"))
+NF.moist.LSM2<-NF.moist.LSM2%>%select(entry, emmean)
+names(NF.moist.LSM2)[2]<-c("moist")
+### Field 13
+# NF.model.moist3<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F3, REML=TRUE)
+# NF.moist.LSM3<-as.data.frame(emmeans(NF.model.moist3, spec="entry"))
+# NF.moist.LSM3<-NF.moist.LSM3%>%select(entry, emmean)
+# names(NF.moist.LSM3)[2]<-c("moist")
+### Field 14
+NF.model.moist4<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F4, REML=TRUE)
+NF.moist.LSM4<-as.data.frame(emmeans(NF.model.moist4, spec="entry"))
+NF.moist.LSM4<-NF.moist.LSM4%>%select(entry, emmean)
+names(NF.moist.LSM4)[2]<-c("moist")
+### Field 15
+NF.model.moist5<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F5, REML=TRUE)
+NF.moist.LSM5<-as.data.frame(emmeans(NF.model.moist5, spec="entry"))
+NF.moist.LSM5<-NF.moist.LSM5%>%select(entry, emmean)
+names(NF.moist.LSM5)[2]<-c("moist")
+```
+
+## Central (2) Early (A)
+
+```{r Central_Early_Moisture, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## CENTRAL EARLY
+### Field 21
+# CE.model.moist1<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F1, REML=TRUE)
+# CE.moist.LSM1<-as.data.frame(emmeans(CE.model.moist1, spec="entry"))
+# CE.moist.LSM1<-CE.moist.LSM1%>%select(entry, emmean)
+# names(CE.moist.LSM1)[2]<-c("moist")
+### Field 22
+CE.model.moist2<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F2, REML=TRUE)
+CE.moist.LSM2<-as.data.frame(emmeans(CE.model.moist2, spec="entry"))
+CE.moist.LSM2<-CE.moist.LSM2%>%select(entry, emmean)
+names(CE.moist.LSM2)[2]<-c("moist")
+### Field 23
+CE.model.moist3<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F3, REML=TRUE)
+CE.moist.LSM3<-as.data.frame(emmeans(CE.model.moist3, spec="entry"))
+CE.moist.LSM3<-CE.moist.LSM3%>%select(entry, emmean)
+names(CE.moist.LSM3)[2]<-c("moist")
+### Field 24
+CE.model.moist4<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F4, REML=TRUE)
+CE.moist.LSM4<-as.data.frame(emmeans(CE.model.moist4, spec="entry"))
+CE.moist.LSM4<-CE.moist.LSM4%>%select(entry, emmean)
+names(CE.moist.LSM4)[2]<-c("moist")
+### Field 25
+CE.model.moist5<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F5, REML=TRUE)
+CE.moist.LSM5<-as.data.frame(emmeans(CE.model.moist5, spec="entry"))
+CE.moist.LSM5<-CE.moist.LSM5%>%select(entry, emmean)
+names(CE.moist.LSM5)[2]<-c("moist")
+```
+
+## Central (2) Full (B)
+
+```{r Central_Full_Moisture, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## CENTRAL FULL
+### Field 21
+# CF.model.moist1<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F1, REML=TRUE)
+# CF.moist.LSM1<-as.data.frame(emmeans(CF.model.moist1, spec="entry"))
+# CF.moist.LSM1<-CF.moist.LSM1%>%select(entry, emmean)
+# names(CF.moist.LSM1)[2]<-c("moist")
+### Field 22
+CF.model.moist2<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F2, REML=TRUE)
+CF.moist.LSM2<-as.data.frame(emmeans(CF.model.moist2, spec="entry"))
+CF.moist.LSM2<-CF.moist.LSM2%>%select(entry, emmean)
+names(CF.moist.LSM2)[2]<-c("moist")
+### Field 23
+CF.model.moist3<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F3, REML=TRUE)
+CF.moist.LSM3<-as.data.frame(emmeans(CF.model.moist3, spec="entry"))
+CF.moist.LSM3<-CF.moist.LSM3%>%select(entry, emmean)
+names(CF.moist.LSM3)[2]<-c("moist")
+### Field 24
+CF.model.moist4<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F4, REML=TRUE)
+CF.moist.LSM4<-as.data.frame(emmeans(CF.model.moist4, spec="entry"))
+CF.moist.LSM4<-CF.moist.LSM4%>%select(entry, emmean)
+names(CF.moist.LSM4)[2]<-c("moist")
+### Field 225
+CF.model.moist5<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F5, REML=TRUE)
+CF.moist.LSM5<-as.data.frame(emmeans(CF.model.moist5, spec="entry"))
+CF.moist.LSM5<-CF.moist.LSM5%>%select(entry, emmean)
+names(CF.moist.LSM5)[2]<-c("moist")
+```
+
+## South (3) Early (A)
+
+```{r South_Early_Moisture, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## SOUTH EARLY
+### Field 31
+# SE.model.moist1<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F1, REML=TRUE)
+# SE.moist.LSM1<-as.data.frame(emmeans(SE.model.moist1, spec="entry"))
+# SE.moist.LSM1<-SE.moist.LSM1%>%select(entry, emmean)
+# names(SE.moist.LSM1)[2]<-c("moist")
+### Field 32
+SE.model.moist2<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F2, REML=TRUE)
+SE.moist.LSM2<-as.data.frame(emmeans(SE.model.moist2, spec="entry"))
+SE.moist.LSM2<-SE.moist.LSM2%>%select(entry, emmean)
+names(SE.moist.LSM2)[2]<-c("moist")
+### Field 33
+SE.model.moist3<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F3, REML=TRUE)
+SE.moist.LSM3<-as.data.frame(emmeans(SE.model.moist3, spec="entry"))
+SE.moist.LSM3<-SE.moist.LSM3%>%select(entry, emmean)
+names(SE.moist.LSM3)[2]<-c("moist")
+### Field 34
+SE.model.moist4<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F4, REML=TRUE)
+SE.moist.LSM4<-as.data.frame(emmeans(SE.model.moist4, spec="entry"))
+SE.moist.LSM4<-SE.moist.LSM4%>%select(entry, emmean)
+names(SE.moist.LSM4)[2]<-c("moist")
+### Field 35
+SE.model.moist5<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F5, REML=TRUE)
+SE.moist.LSM5<-as.data.frame(emmeans(SE.model.moist5, spec="entry"))
+SE.moist.LSM5<-SE.moist.LSM5%>%select(entry, emmean)
+names(SE.moist.LSM5)[2]<-c("moist")
+```
+
+## South (3) Full (B)
+
+```{r South_Full_Moisture, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## SOUTH FULL
+### Field 31
+# SE.model.moist1<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F1, REML=TRUE)
+# SE.moist.LSM1<-as.data.frame(emmeans(SE.model.moist1, spec="entry"))
+# SE.moist.LSM1<-SE.moist.LSM1%>%select(entry, emmean)
+# names(SE.moist.LSM1)[2]<-c("moist")
+### Field 32
+SE.model.moist2<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F2, REML=TRUE)
+SE.moist.LSM2<-as.data.frame(emmeans(SE.model.moist2, spec="entry"))
+SE.moist.LSM2<-SE.moist.LSM2%>%select(entry, emmean)
+names(SE.moist.LSM2)[2]<-c("moist")
+### Field 33
+SE.model.moist3<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F3, REML=TRUE)
+SE.moist.LSM3<-as.data.frame(emmeans(SE.model.moist3, spec="entry"))
+SE.moist.LSM3<-SE.moist.LSM3%>%select(entry, emmean)
+names(SE.moist.LSM3)[2]<-c("moist")
+### Field 34
+SE.model.moist4<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F4, REML=TRUE)
+SE.moist.LSM4<-as.data.frame(emmeans(SE.model.moist4, spec="entry"))
+SE.moist.LSM4<-SE.moist.LSM4%>%select(entry, emmean)
+names(SE.moist.LSM4)[2]<-c("moist")
+### Field 35
+SE.model.moist5<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F5, REML=TRUE)
+SE.moist.LSM5<-as.data.frame(emmeans(SE.model.moist5, spec="entry"))
+SE.moist.LSM5<-SE.moist.LSM5%>%select(entry, emmean)
+names(SE.moist.LSM5)[2]<-c("moist")
+
+## South Full
+# SF.model.moist1<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F1, REML=TRUE)
+# SF.moist.LSM1<-as.data.frame(emmeans(SF.model.moist1, spec="entry"))
+# SF.moist.LSM1<-SF.moist.LSM1%>%select(entry, emmean)
+# names(SF.moist.LSM1)[2]<-c("moist")
+
+SF.model.moist2<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F2, REML=TRUE)
+SF.moist.LSM2<-as.data.frame(emmeans(SF.model.moist2, spec="entry"))
+SF.moist.LSM2<-SF.moist.LSM2%>%select(entry, emmean)
+names(SF.moist.LSM2)[2]<-c("moist")
+
+SF.model.moist3<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F3, REML=TRUE)
+SF.moist.LSM3<-as.data.frame(emmeans(SF.model.moist3, spec="entry"))
+SF.moist.LSM3<-SF.moist.LSM3%>%select(entry, emmean)
+names(SF.moist.LSM3)[2]<-c("moist")
+
+SF.model.moist4<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F4, REML=TRUE)
+SF.moist.LSM4<-as.data.frame(emmeans(SF.model.moist4, spec="entry"))
+SF.moist.LSM4<-SF.moist.LSM4%>%select(entry, emmean)
+names(SF.moist.LSM4)[2]<-c("moist")
+
+SF.model.moist5<-lmer(moist~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F5, REML=TRUE)
+SF.moist.LSM5<-as.data.frame(emmeans(SF.model.moist5, spec="entry"))
+SF.moist.LSM5<-SF.moist.LSM5%>%select(entry, emmean)
+names(SF.moist.LSM5)[2]<-c("moist")
+```
+
+
+## Add to Main Table
+
+### North (1)
+
+```{r Combine_Moisture, echo=FALSE, comment=NA, message=FALSE}
+## Combine with Main Table
+## NORTH
+## North Early
+NE.11<-left_join(NE.11, NE.moist.LSM1)
+NE.12<-left_join(NE.12, NE.moist.LSM2)
+# NE.13<-left_join(NE.13, NE.moist.LSM3)
+NE.14<-left_join(NE.14, NE.moist.LSM4)
+NE.15<-left_join(NE.15, NE.moist.LSM5)
+## North Full
+NF.11<-left_join(NF.11, NF.moist.LSM1)
+NF.12<-left_join(NF.12, NF.moist.LSM2)
+# NF.13<-left_join(NF.13, NF.moist.LSM3)
+NF.14<-left_join(NF.14, NF.moist.LSM4)
+NF.15<-left_join(NF.15, NF.moist.LSM5)
+```
+
+### Central (2)
+
+```{r Combine_Moisture, echo=FALSE, comment=NA, message=FALSE}
+## CENTRAL
+## Central Early
+# CE.21<-left_join(CE.21, CE.moist.LSM1)
+CE.22<-left_join(CE.22, CE.moist.LSM2)
+CE.23<-left_join(CE.23, CE.moist.LSM3)
+CE.24<-left_join(CE.24, CE.moist.LSM4)
+CE.25<-left_join(CE.25, CE.moist.LSM5)
+## Central Full
+# CF.21<-left_join(CF.21, CF.moist.LSM1)
+CF.22<-left_join(CF.22, CF.moist.LSM2)
+CF.23<-left_join(CF.23, CF.moist.LSM3)
+CF.24<-left_join(CF.24, CF.moist.LSM4)
+CF.25<-left_join(CF.25, CF.moist.LSM5)
+```
+
+### South (3)
+
+```{r Combine_Moisture, echo=FALSE, comment=NA, message=FALSE}
+## SOUTH
+## South Early
+# SE.31<-left_join(SE.31, SE.moist.LSM1)
+SE.32<-left_join(SE.32, SE.moist.LSM2)
+SE.33<-left_join(SE.33, SE.moist.LSM3)
+SE.34<-left_join(SE.34, SE.moist.LSM4)
+SE.35<-left_join(SE.35, SE.moist.LSM5)
+## South Full
+# SF.31<-left_join(SF.31, SF.moist.LSM1)
+SF.32<-left_join(SF.32, SF.moist.LSM2)
+SF.33<-left_join(SF.33, SF.moist.LSM3)
+SF.34<-left_join(SF.34, SF.moist.LSM4)
+SF.35<-left_join(SF.35, SF.moist.LSM5)
+```
+
+# Lodging Models & LSMs:
+
+## Root LDG
+
+### North (1) Early (A)
+
+```{r North_Early_Root_Lodging, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## Root Lodging
+## NORTH EARLY
+### Field 11
+NE.model.rtldg1<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F1, REML=TRUE)
+NE.rtldg.LSM1<-as.data.frame(emmeans(NE.model.rtldg1, spec="entry"))
+NE.rtldg.LSM1<-NE.rtldg.LSM1%>%select(entry, emmean)
+names(NE.rtldg.LSM1)[2]<-c("rtldg")
+### Field 12
+NE.model.rtldg2<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F2, REML=TRUE)
+NE.rtldg.LSM2<-as.data.frame(emmeans(NE.model.rtldg2, spec="entry"))
+NE.rtldg.LSM2<-NE.rtldg.LSM2%>%select(entry, emmean)
+names(NE.rtldg.LSM2)[2]<-c("rtldg")
+### Field 13
+# NE.model.rtldg3<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F3, REML=TRUE)
+# NE.rtldg.LSM3<-as.data.frame(emmeans(NE.model.rtldg3, spec="entry"))
+# NE.rtldg.LSM3<-NE.rtldg.LSM3%>%select(entry, emmean)
+# names(NE.rtldg.LSM3)[2]<-c("rtldg")
+### Field 14
+NE.model.rtldg4<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F4, REML=TRUE)
+NE.rtldg.LSM4<-as.data.frame(emmeans(NE.model.rtldg4, spec="entry"))
+NE.rtldg.LSM4<-NE.rtldg.LSM4%>%select(entry, emmean)
+names(NE.rtldg.LSM4)[2]<-c("rtldg")
+### Field 15
+NE.model.rtldg5<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F5, REML=TRUE)
+NE.rtldg.LSM5<-as.data.frame(emmeans(NE.model.rtldg5, spec="entry"))
+NE.rtldg.LSM5<-NE.rtldg.LSM5%>%select(entry, emmean)
+names(NE.rtldg.LSM5)[2]<-c("rtldg")
+```
+
+### North (1) Full (B)
+
+```{r North_Full_Root_Lodging, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## NORTH FULL
+### Field 11
+NF.model.rtldg1<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F1, REML=TRUE)
+NF.rtldg.LSM1<-as.data.frame(emmeans(NF.model.rtldg1, spec="entry"))
+NF.rtldg.LSM1<-NF.rtldg.LSM1%>%select(entry, emmean)
+names(NF.rtldg.LSM1)[2]<-c("rtldg")
+### Field 12
+NF.model.rtldg2<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F2, REML=TRUE)
+NF.rtldg.LSM2<-as.data.frame(emmeans(NF.model.rtldg2, spec="entry"))
+NF.rtldg.LSM2<-NF.rtldg.LSM2%>%select(entry, emmean)
+names(NF.rtldg.LSM2)[2]<-c("rtldg")
+### Field 13
+# NF.model.rtldg3<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F3, REML=TRUE)
+# NF.rtldg.LSM3<-as.data.frame(emmeans(NF.model.rtldg3, spec="entry"))
+# NF.rtldg.LSM3<-NF.rtldg.LSM3%>%select(entry, emmean)
+# names(NF.rtldg.LSM3)[2]<-c("rtldg")
+### Field 14
+NF.model.rtldg4<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F4, REML=TRUE)
+NF.rtldg.LSM4<-as.data.frame(emmeans(NF.model.rtldg4, spec="entry"))
+NF.rtldg.LSM4<-NF.rtldg.LSM4%>%select(entry, emmean)
+names(NF.rtldg.LSM4)[2]<-c("rtldg")
+### Field 15
+NF.model.rtldg5<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F5, REML=TRUE)
+NF.rtldg.LSM5<-as.data.frame(emmeans(NF.model.rtldg5, spec="entry"))
+NF.rtldg.LSM5<-NF.rtldg.LSM5%>%select(entry, emmean)
+names(NF.rtldg.LSM5)[2]<-c("rtldg")
+```
+
+### Central (2) Early (A)
+
+```{r Central_Early_Root_Lodging, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## CENTRAL EARLY
+### Field 21
+# CE.model.rtldg1<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F1, REML=TRUE)
+# CE.rtldg.LSM1<-as.data.frame(emmeans(CE.model.rtldg1, spec="entry"))
+# CE.rtldg.LSM1<-CE.rtldg.LSM1%>%select(entry, emmean)
+# names(CE.rtldg.LSM1)[2]<-c("rtldg")
+### Field 22
+CE.model.rtldg2<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F2, REML=TRUE)
+CE.rtldg.LSM2<-as.data.frame(emmeans(CE.model.rtldg2, spec="entry"))
+CE.rtldg.LSM2<-CE.rtldg.LSM2%>%select(entry, emmean)
+names(CE.rtldg.LSM2)[2]<-c("rtldg")
+### Field 23
+CE.model.rtldg3<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F3, REML=TRUE)
+CE.rtldg.LSM3<-as.data.frame(emmeans(CE.model.rtldg3, spec="entry"))
+CE.rtldg.LSM3<-CE.rtldg.LSM3%>%select(entry, emmean)
+names(CE.rtldg.LSM3)[2]<-c("rtldg")
+### Field 24
+CE.model.rtldg4<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F4, REML=TRUE)
+CE.rtldg.LSM4<-as.data.frame(emmeans(CE.model.rtldg4, spec="entry"))
+CE.rtldg.LSM4<-CE.rtldg.LSM4%>%select(entry, emmean)
+names(CE.rtldg.LSM4)[2]<-c("rtldg")
+### Field 25
+CE.model.rtldg5<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F5, REML=TRUE)
+CE.rtldg.LSM5<-as.data.frame(emmeans(CE.model.rtldg5, spec="entry"))
+CE.rtldg.LSM5<-CE.rtldg.LSM5%>%select(entry, emmean)
+names(CE.rtldg.LSM5)[2]<-c("rtldg")
+```
+
+### Central (2) Full (B)
+
+```{r Central_Full_Root_Lodging, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## CENTRAL FULL
+### Field 21
+# CF.model.rtldg1<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F1, REML=TRUE)
+# CF.rtldg.LSM1<-as.data.frame(emmeans(CF.model.rtldg1, spec="entry"))
+# CF.rtldg.LSM1<-CF.rtldg.LSM1%>%select(entry, emmean)
+# names(CF.rtldg.LSM1)[2]<-c("rtldg")
+### Field 22
+CF.model.rtldg2<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F2, REML=TRUE)
+CF.rtldg.LSM2<-as.data.frame(emmeans(CF.model.rtldg2, spec="entry"))
+CF.rtldg.LSM2<-CF.rtldg.LSM2%>%select(entry, emmean)
+names(CF.rtldg.LSM2)[2]<-c("rtldg")
+### Field 23
+CF.model.rtldg3<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F3, REML=TRUE)
+CF.rtldg.LSM3<-as.data.frame(emmeans(CF.model.rtldg3, spec="entry"))
+CF.rtldg.LSM3<-CF.rtldg.LSM3%>%select(entry, emmean)
+names(CF.rtldg.LSM3)[2]<-c("rtldg")
+### Field 24
+CF.model.rtldg4<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F4, REML=TRUE)
+CF.rtldg.LSM4<-as.data.frame(emmeans(CF.model.rtldg4, spec="entry"))
+CF.rtldg.LSM4<-CF.rtldg.LSM4%>%select(entry, emmean)
+names(CF.rtldg.LSM4)[2]<-c("rtldg")
+### Field 25
+CF.model.rtldg5<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F5, REML=TRUE)
+CF.rtldg.LSM5<-as.data.frame(emmeans(CF.model.rtldg5, spec="entry"))
+CF.rtldg.LSM5<-CF.rtldg.LSM5%>%select(entry, emmean)
+names(CF.rtldg.LSM5)[2]<-c("rtldg")
+```
+
+### South (3) Early (A)
+
+```{r South_Early_Root_Lodging, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## SOUTH EARLY
+### Field 31
+# SE.model.rtldg1<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F1, REML=TRUE)
+# SE.rtldg.LSM1<-as.data.frame(emmeans(SE.model.rtldg1, spec="entry"))
+# SE.rtldg.LSM1<-SE.rtldg.LSM1%>%select(entry, emmean)
+# names(SE.rtldg.LSM1)[2]<-c("rtldg")
+### Field 32
+SE.model.rtldg2<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F2, REML=TRUE)
+SE.rtldg.LSM2<-as.data.frame(emmeans(SE.model.rtldg2, spec="entry"))
+SE.rtldg.LSM2<-SE.rtldg.LSM2%>%select(entry, emmean)
+names(SE.rtldg.LSM2)[2]<-c("rtldg")
+### Field 33
+SE.model.rtldg3<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F3, REML=TRUE)
+SE.rtldg.LSM3<-as.data.frame(emmeans(SE.model.rtldg3, spec="entry"))
+SE.rtldg.LSM3<-SE.rtldg.LSM3%>%select(entry, emmean)
+names(SE.rtldg.LSM3)[2]<-c("rtldg")
+### Field 34
+SE.model.rtldg4<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F4, REML=TRUE)
+SE.rtldg.LSM4<-as.data.frame(emmeans(SE.model.rtldg4, spec="entry"))
+SE.rtldg.LSM4<-SE.rtldg.LSM4%>%select(entry, emmean)
+names(SE.rtldg.LSM4)[2]<-c("rtldg")
+### Field 35
+SE.model.rtldg5<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F5, REML=TRUE)
+SE.rtldg.LSM5<-as.data.frame(emmeans(SE.model.rtldg5, spec="entry"))
+SE.rtldg.LSM5<-SE.rtldg.LSM5%>%select(entry, emmean)
+names(SE.rtldg.LSM5)[2]<-c("rtldg")
+
+## South Full
+### Field 31
+# SF.model.rtldg1<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F1, REML=TRUE)
+# SF.rtldg.LSM1<-as.data.frame(emmeans(SF.model.rtldg1, spec="entry"))
+# SF.rtldg.LSM1<-SF.rtldg.LSM1%>%select(entry, emmean)
+# names(SF.rtldg.LSM1)[2]<-c("rtldg")
+### Field 32
+SF.model.rtldg2<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F2, REML=TRUE)
+SF.rtldg.LSM2<-as.data.frame(emmeans(SF.model.rtldg2, spec="entry"))
+SF.rtldg.LSM2<-SF.rtldg.LSM2%>%select(entry, emmean)
+names(SF.rtldg.LSM2)[2]<-c("rtldg")
+### Field 33
+SF.model.rtldg3<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F3, REML=TRUE)
+SF.rtldg.LSM3<-as.data.frame(emmeans(SF.model.rtldg3, spec="entry"))
+SF.rtldg.LSM3<-SF.rtldg.LSM3%>%select(entry, emmean)
+names(SF.rtldg.LSM3)[2]<-c("rtldg")
+### Field 34
+SF.model.rtldg4<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F4, REML=TRUE)
+SF.rtldg.LSM4<-as.data.frame(emmeans(SF.model.rtldg4, spec="entry"))
+SF.rtldg.LSM4<-SF.rtldg.LSM4%>%select(entry, emmean)
+names(SF.rtldg.LSM4)[2]<-c("rtldg")
+### Field 35
+SF.model.rtldg5<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F5, REML=TRUE)
+SF.rtldg.LSM5<-as.data.frame(emmeans(SF.model.rtldg5, spec="entry"))
+SF.rtldg.LSM5<-SF.rtldg.LSM5%>%select(entry, emmean)
+names(SF.rtldg.LSM5)[2]<-c("rtldg")
+```
+
+### South (3) Full (B)
+
+```{r South_Full_Root_Lodging, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## SOUTH FULL
+### Field 31
+# SF.model.rtldg1<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F1, REML=TRUE)
+# SF.rtldg.LSM1<-as.data.frame(emmeans(SF.model.rtldg1, spec="entry"))
+# SF.rtldg.LSM1<-SF.rtldg.LSM1%>%select(entry, emmean)
+# names(SF.rtldg.LSM1)[2]<-c("rtldg")
+### Field 32
+SF.model.rtldg2<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F2, REML=TRUE)
+SF.rtldg.LSM2<-as.data.frame(emmeans(SF.model.rtldg2, spec="entry"))
+SF.rtldg.LSM2<-SF.rtldg.LSM2%>%select(entry, emmean)
+names(SF.rtldg.LSM2)[2]<-c("rtldg")
+### Field 33
+SF.model.rtldg3<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F3, REML=TRUE)
+SF.rtldg.LSM3<-as.data.frame(emmeans(SF.model.rtldg3, spec="entry"))
+SF.rtldg.LSM3<-SF.rtldg.LSM3%>%select(entry, emmean)
+names(SF.rtldg.LSM3)[2]<-c("rtldg")
+### Field 34
+SF.model.rtldg4<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F4, REML=TRUE)
+SF.rtldg.LSM4<-as.data.frame(emmeans(SF.model.rtldg4, spec="entry"))
+SF.rtldg.LSM4<-SF.rtldg.LSM4%>%select(entry, emmean)
+names(SF.rtldg.LSM4)[2]<-c("rtldg")
+### Field 35
+SF.model.rtldg5<-lmer(rtldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F5, REML=TRUE)
+SF.rtldg.LSM5<-as.data.frame(emmeans(SF.model.rtldg5, spec="entry"))
+SF.rtldg.LSM5<-SF.rtldg.LSM5%>%select(entry, emmean)
+names(SF.rtldg.LSM5)[2]<-c("rtldg")
+```
+
+## Stalk LDG
+
+### North (1) Early (A)
+
+```{r North_Ealry_Stalk_Lodging, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## Stalk Lodging
+## NORTH EARLY
+### Field 11
+NE.model.skldg1<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F1, REML=TRUE)
+NE.skldg.LSM1<-as.data.frame(emmeans(NE.model.skldg1, spec="entry"))
+NE.skldg.LSM1<-NE.skldg.LSM1%>%select(entry, emmean)
+names(NE.skldg.LSM1)[2]<-c("skldg")
+### Field 12
+NE.model.skldg2<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F2, REML=TRUE)
+NE.skldg.LSM2<-as.data.frame(emmeans(NE.model.skldg2, spec="entry"))
+NE.skldg.LSM2<-NE.skldg.LSM2%>%select(entry, emmean)
+names(NE.skldg.LSM2)[2]<-c("skldg")
+### Field 13
+# NE.model.skldg3<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F3, REML=TRUE)
+# NE.skldg.LSM3<-as.data.frame(emmeans(NE.model.skldg3, spec="entry"))
+# NE.skldg.LSM3<-NE.skldg.LSM3%>%select(entry, emmean)
+# names(NE.skldg.LSM3)[2]<-c("skldg")
+### Field 14
+NE.model.skldg4<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F4, REML=TRUE)
+NE.skldg.LSM4<-as.data.frame(emmeans(NE.model.skldg4, spec="entry"))
+NE.skldg.LSM4<-NE.skldg.LSM4%>%select(entry, emmean)
+names(NE.skldg.LSM4)[2]<-c("skldg")
+### Field 15
+NE.model.skldg5<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NE.F5, REML=TRUE)
+NE.skldg.LSM5<-as.data.frame(emmeans(NE.model.skldg5, spec="entry"))
+NE.skldg.LSM5<-NE.skldg.LSM5%>%select(entry, emmean)
+names(NE.skldg.LSM5)[2]<-c("skldg")
+```
+
+### North (1) Full (B)
+
+```{r North_Full_Stalk_Lodging, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## NORTH FULL
+### Field 11
+NF.model.skldg1<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F1, REML=TRUE)
+NF.skldg.LSM1<-as.data.frame(emmeans(NF.model.skldg1, spec="entry"))
+NF.skldg.LSM1<-NF.skldg.LSM1%>%select(entry, emmean)
+names(NF.skldg.LSM1)[2]<-c("skldg")
+### Field 12
+NF.model.skldg2<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F2, REML=TRUE)
+NF.skldg.LSM2<-as.data.frame(emmeans(NF.model.skldg2, spec="entry"))
+NF.skldg.LSM2<-NF.skldg.LSM2%>%select(entry, emmean)
+names(NF.skldg.LSM2)[2]<-c("skldg")
+### Field 13
+# NF.model.skldg3<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F3, REML=TRUE)
+# NF.skldg.LSM3<-as.data.frame(emmeans(NF.model.skldg3, spec="entry"))
+# NF.skldg.LSM3<-NF.skldg.LSM3%>%select(entry, emmean)
+# names(NF.skldg.LSM3)[2]<-c("skldg")
+### Field 14
+NF.model.skldg4<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F4, REML=TRUE)
+NF.skldg.LSM4<-as.data.frame(emmeans(NF.model.skldg4, spec="entry"))
+NF.skldg.LSM4<-NF.skldg.LSM4%>%select(entry, emmean)
+names(NF.skldg.LSM4)[2]<-c("skldg")
+### Field 15
+NF.model.skldg5<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=NF.F5, REML=TRUE)
+NF.skldg.LSM5<-as.data.frame(emmeans(NF.model.skldg5, spec="entry"))
+NF.skldg.LSM5<-NF.skldg.LSM5%>%select(entry, emmean)
+names(NF.skldg.LSM5)[2]<-c("skldg")
+```
+
+### Central (2) Early (A)
+
+```{r Central_Early_Stalk_Lodging, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## CENTRAL EARLY
+### Field 21
+# CE.model.skldg1<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F1, REML=TRUE)
+# CE.skldg.LSM1<-as.data.frame(emmeans(CE.model.skldg1, spec="entry"))
+# CE.skldg.LSM1<-CE.skldg.LSM1%>%select(entry, emmean)
+# names(CE.skldg.LSM1)[2]<-c("skldg")
+### Field 22
+CE.model.skldg2<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F2, REML=TRUE)
+CE.skldg.LSM2<-as.data.frame(emmeans(CE.model.skldg2, spec="entry"))
+CE.skldg.LSM2<-CE.skldg.LSM2%>%select(entry, emmean)
+names(CE.skldg.LSM2)[2]<-c("skldg")
+### Field 23
+CE.model.skldg3<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F3, REML=TRUE)
+CE.skldg.LSM3<-as.data.frame(emmeans(CE.model.skldg3, spec="entry"))
+CE.skldg.LSM3<-CE.skldg.LSM3%>%select(entry, emmean)
+names(CE.skldg.LSM3)[2]<-c("skldg")
+### Field 24
+CE.model.skldg4<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F4, REML=TRUE)
+CE.skldg.LSM4<-as.data.frame(emmeans(CE.model.skldg4, spec="entry"))
+CE.skldg.LSM4<-CE.skldg.LSM4%>%select(entry, emmean)
+names(CE.skldg.LSM4)[2]<-c("skldg")
+### Field 25
+CE.model.skldg5<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CE.F5, REML=TRUE)
+CE.skldg.LSM5<-as.data.frame(emmeans(CE.model.skldg5, spec="entry"))
+CE.skldg.LSM5<-CE.skldg.LSM5%>%select(entry, emmean)
+names(CE.skldg.LSM5)[2]<-c("skldg")
+```
+
+### Central (2) Full (B)
+
+```{r Central_Full_Stalk_Lodging, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## CENTRAL FULL
+### Field 21
+# CF.model.skldg1<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F1, REML=TRUE)
+# CF.skldg.LSM1<-as.data.frame(emmeans(CF.model.skldg1, spec="entry"))
+# CF.skldg.LSM1<-CF.skldg.LSM1%>%select(entry, emmean)
+# names(CF.skldg.LSM1)[2]<-c("skldg")
+### Field 22
+CF.model.skldg2<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F2, REML=TRUE)
+CF.skldg.LSM2<-as.data.frame(emmeans(CF.model.skldg2, spec="entry"))
+CF.skldg.LSM2<-CF.skldg.LSM2%>%select(entry, emmean)
+names(CF.skldg.LSM2)[2]<-c("skldg")
+### Field 23
+CF.model.skldg3<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F3, REML=TRUE)
+CF.skldg.LSM3<-as.data.frame(emmeans(CF.model.skldg3, spec="entry"))
+CF.skldg.LSM3<-CF.skldg.LSM3%>%select(entry, emmean)
+names(CF.skldg.LSM3)[2]<-c("skldg")
+### Field 24
+CF.model.skldg4<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F4, REML=TRUE)
+CF.skldg.LSM4<-as.data.frame(emmeans(CF.model.skldg4, spec="entry"))
+CF.skldg.LSM4<-CF.skldg.LSM4%>%select(entry, emmean)
+names(CF.skldg.LSM4)[2]<-c("skldg")
+### Field 25
+CF.model.skldg5<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=CF.F5, REML=TRUE)
+CF.skldg.LSM5<-as.data.frame(emmeans(CF.model.skldg5, spec="entry"))
+CF.skldg.LSM5<-CF.skldg.LSM5%>%select(entry, emmean)
+names(CF.skldg.LSM5)[2]<-c("skldg")
+```
+
+### South (3) Early (A)
+
+```{r South_Early_Stalk_Lodging, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## SOUTH EARLY
+### Field 31
+# SE.model.skldg1<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F1, REML=TRUE)
+# SE.skldg.LSM1<-as.data.frame(emmeans(SE.model.skldg1, spec="entry"))
+# SE.skldg.LSM1<-SE.skldg.LSM1%>%select(entry, emmean)
+# names(SE.skldg.LSM1)[2]<-c("skldg")
+### Field 32
+SE.model.skldg2<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F2, REML=TRUE)
+SE.skldg.LSM2<-as.data.frame(emmeans(SE.model.skldg2, spec="entry"))
+SE.skldg.LSM2<-SE.skldg.LSM2%>%select(entry, emmean)
+names(SE.skldg.LSM2)[2]<-c("skldg")
+### Field 33
+SE.model.skldg3<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F3, REML=TRUE)
+SE.skldg.LSM3<-as.data.frame(emmeans(SE.model.skldg3, spec="entry"))
+SE.skldg.LSM3<-SE.skldg.LSM3%>%select(entry, emmean)
+names(SE.skldg.LSM3)[2]<-c("skldg")
+### Field 34
+SE.model.skldg4<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F4, REML=TRUE)
+SE.skldg.LSM4<-as.data.frame(emmeans(SE.model.skldg4, spec="entry"))
+SE.skldg.LSM4<-SE.skldg.LSM4%>%select(entry, emmean)
+names(SE.skldg.LSM4)[2]<-c("skldg")
+### Field 35
+SE.model.skldg5<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SE.F5, REML=TRUE)
+SE.skldg.LSM5<-as.data.frame(emmeans(SE.model.skldg5, spec="entry"))
+SE.skldg.LSM5<-SE.skldg.LSM5%>%select(entry, emmean)
+names(SE.skldg.LSM5)[2]<-c("skldg")
+```
+
+### South (3) Full (B)
+
+```{r South_Full_Stalk_Lodging, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## SOUTH FULL
+### Field 31
+# SF.model.skldg1<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F1, REML=TRUE)
+# SF.skldg.LSM1<-as.data.frame(emmeans(SF.model.skldg1, spec="entry"))
+# SF.skldg.LSM1<-SF.skldg.LSM1%>%select(entry, emmean)
+# names(SF.skldg.LSM1)[2]<-c("skldg")
+### Field 32
+SF.model.skldg2<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F2, REML=TRUE)
+SF.skldg.LSM2<-as.data.frame(emmeans(SF.model.skldg2, spec="entry"))
+SF.skldg.LSM2<-SF.skldg.LSM2%>%select(entry, emmean)
+names(SF.skldg.LSM2)[2]<-c("skldg")
+### Field 33
+SF.model.skldg3<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F3, REML=TRUE)
+SF.skldg.LSM3<-as.data.frame(emmeans(SF.model.skldg3, spec="entry"))
+SF.skldg.LSM3<-SF.skldg.LSM3%>%select(entry, emmean)
+names(SF.skldg.LSM3)[2]<-c("skldg")
+### Field 34
+SF.model.skldg4<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F4, REML=TRUE)
+SF.skldg.LSM4<-as.data.frame(emmeans(SF.model.skldg4, spec="entry"))
+SF.skldg.LSM4<-SF.skldg.LSM4%>%select(entry, emmean)
+names(SF.skldg.LSM4)[2]<-c("skldg")
+### Field 35
+SF.model.skldg5<-lmer(skldg~entry + (1 | rep) + (1|rep:pass) + (1 | rep:rng), data=SF.F5, REML=TRUE)
+SF.skldg.LSM5<-as.data.frame(emmeans(SF.model.skldg5, spec="entry"))
+SF.skldg.LSM5<-SF.skldg.LSM5%>%select(entry, emmean)
+names(SF.skldg.LSM5)[2]<-c("skldg")
+```
+
+
+## Add to Main Table
+
+### Combine Root & Stalk Tables
+
+```{r Combine_Lodging, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## Combine Lodging (Root & Stalk) Columns 
+## NORTH
+## North Early
+ldg.NE11<-left_join(NE.rtldg.LSM1, NE.skldg.LSM1)
+ldg.NE12<-left_join(NE.rtldg.LSM2, NE.skldg.LSM2)
+# ldg.NE13<-left_join(NE.rtldg.LSM3, NE.skldg.LSM3)
+ldg.NE14<-left_join(NE.rtldg.LSM4, NE.skldg.LSM4)
+ldg.NE15<-left_join(NE.rtldg.LSM5, NE.skldg.LSM5)
+## North Full
+ldg.NF11<-left_join(NF.rtldg.LSM1, NF.skldg.LSM1)
+ldg.NF12<-left_join(NF.rtldg.LSM2, NF.skldg.LSM2)
+# ldg.NF13<-left_join(NF.rtldg.LSM3, NF.skldg.LSM3)
+ldg.NF14<-left_join(NF.rtldg.LSM4, NF.skldg.LSM4)
+ldg.NF15<-left_join(NF.rtldg.LSM5, NF.skldg.LSM5)
+
+## CENTRAL
+## Central Early
+# ldg.CE21<-left_join(CE.rtldg.LSM1, CE.skldg.LSM1)
+ldg.CE22<-left_join(CE.rtldg.LSM2, CE.skldg.LSM2)
+ldg.CE23<-left_join(CE.rtldg.LSM3, CE.skldg.LSM3)
+ldg.CE24<-left_join(CE.rtldg.LSM4, CE.skldg.LSM4)
+ldg.CE25<-left_join(CE.rtldg.LSM5, CE.skldg.LSM5)
+## North Full
+# ldg.CF21<-left_join(CF.rtldg.LSM1, CF.skldg.LSM1)
+ldg.CF22<-left_join(CF.rtldg.LSM2, CF.skldg.LSM2)
+ldg.CF23<-left_join(CF.rtldg.LSM3, CF.skldg.LSM3)
+ldg.CF24<-left_join(CF.rtldg.LSM4, CF.skldg.LSM4)
+ldg.CF25<-left_join(CF.rtldg.LSM5, CF.skldg.LSM5)
+
+## SOUTH
+## South Early
+# ldg.SE31<-left_join(SE.rtldg.LSM1, SE.skldg.LSM1)
+ldg.SE32<-left_join(SE.rtldg.LSM2, SE.skldg.LSM2)
+ldg.SE33<-left_join(SE.rtldg.LSM3, SE.skldg.LSM3)
+ldg.SE34<-left_join(SE.rtldg.LSM4, SE.skldg.LSM4)
+ldg.SE35<-left_join(SE.rtldg.LSM5, SE.skldg.LSM5)
+## North Full
+# ldg.SF31<-left_join(SF.rtldg.LSM1, SF.skldg.LSM1)
+ldg.SF32<-left_join(SF.rtldg.LSM2, SF.skldg.LSM2)
+ldg.SF33<-left_join(SF.rtldg.LSM3, SF.skldg.LSM3)
+ldg.SF34<-left_join(SF.rtldg.LSM4, SF.skldg.LSM4)
+ldg.SF35<-left_join(SF.rtldg.LSM5, SF.skldg.LSM5)
+```
+
+### Calculate Total Lodging
+
+```{r Total_Lodging, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## Calculate Total Lodging (tldg) column
+## NORTH
+## North Early
+ldg.NE11<-ldg.NE11%>%mutate(tldg = (rtldg + skldg))
+ldg.NE12<-ldg.NE12%>%mutate(tldg = (rtldg + skldg))
+# ldg.NE13<-ldg.NE13%>%mutate(tldg = (rtldg + skldg))
+ldg.NE14<-ldg.NE14%>%mutate(tldg = (rtldg + skldg))
+ldg.NE15<-ldg.NE15%>%mutate(tldg = (rtldg + skldg))
+## North Full
+ldg.NF11<-ldg.NF11%>%mutate(tldg = (rtldg + skldg))
+ldg.NF12<-ldg.NF12%>%mutate(tldg = (rtldg + skldg))
+# ldg.NF13<-ldg.NF13%>%mutate(tldg = (rtldg + skldg))
+ldg.NF14<-ldg.NF14%>%mutate(tldg = (rtldg + skldg))
+ldg.NF15<-ldg.NF15%>%mutate(tldg = (rtldg + skldg))
+
+## CENTRAL
+## Central Early
+# ldg.CE21<-ldg.CE21%>%mutate(tldg = (rtldg + skldg))
+ldg.CE22<-ldg.CE22%>%mutate(tldg = (rtldg + skldg))
+ldg.CE23<-ldg.CE23%>%mutate(tldg = (rtldg + skldg))
+ldg.CE24<-ldg.CE24%>%mutate(tldg = (rtldg + skldg))
+ldg.CE25<-ldg.CE25%>%mutate(tldg = (rtldg + skldg))
+## Centarl Full
+# ldg.CF21<-ldg.CF21%>%mutate(tldg = (rtldg + skldg))
+ldg.CF22<-ldg.CF22%>%mutate(tldg = (rtldg + skldg))
+ldg.CF23<-ldg.CF23%>%mutate(tldg = (rtldg + skldg))
+ldg.CF24<-ldg.CF24%>%mutate(tldg = (rtldg + skldg))
+ldg.CF25<-ldg.CF25%>%mutate(tldg = (rtldg + skldg))
+
+## SOUTH
+## South Early
+# ldg.SE31<-ldg.SE31%>%mutate(tldg = (rtldg + skldg))
+ldg.SE32<-ldg.SE32%>%mutate(tldg = (rtldg + skldg))
+ldg.SE33<-ldg.SE33%>%mutate(tldg = (rtldg + skldg))
+ldg.SE34<-ldg.SE34%>%mutate(tldg = (rtldg + skldg))
+ldg.SE35<-ldg.SE35%>%mutate(tldg = (rtldg + skldg))
+## South Full
+# ldg.SF31<-ldg.SF31%>%mutate(tldg = (rtldg + skldg))
+ldg.SF32<-ldg.SF32%>%mutate(tldg = (rtldg + skldg))
+ldg.SF33<-ldg.SF33%>%mutate(tldg = (rtldg + skldg))
+ldg.SF34<-ldg.SF34%>%mutate(tldg = (rtldg + skldg))
+ldg.SF35<-ldg.SF35%>%mutate(tldg = (rtldg + skldg))
+```
+
+### Add with Main Table
+
+```{r Combine_Lodging, echo=FALSE, comment=NA, message=FALSE, warning=FALSE}
+## Combine with Main Table
+## NORTH
+## North Early
+NE.11<-left_join(NE.11, ldg.NE11)
+NE.12<-left_join(NE.12, ldg.NE12)
+# NE.13<-left_join(NE.13, ldg.NE13)
+NE.14<-left_join(NE.14, ldg.NE14)
+NE.15<-left_join(NE.15, ldg.NE15)
+## North Full
+NF.11<-left_join(NF.11, ldg.NF11)
+NF.12<-left_join(NF.12, ldg.NF12)
+# NF.13<-left_join(NF.13, ldg.NF13)
+NF.14<-left_join(NF.14, ldg.NF14)
+NF.15<-left_join(NF.15, ldg.NF15)
+
+## CENTRAL
+## Central Early
+# CE.21<-left_join(CE.21, ldg.CE21)
+CE.22<-left_join(CE.22, ldg.CE22)
+CE.23<-left_join(CE.23, ldg.CE23)
+CE.24<-left_join(CE.24, ldg.CE24)
+CE.25<-left_join(CE.25, ldg.CE25)
+## Central Full
+# CF.21<-left_join(CF.21, ldg.CF21)
+CF.22<-left_join(CF.22, ldg.CF22)
+CF.23<-left_join(CF.23, ldg.CF23)
+CF.24<-left_join(CF.24, ldg.CF24)
+CF.25<-left_join(CF.25, ldg.CF25)
+
+## SOUTH
+## South Early
+# SE.31<-left_join(SE.31, ldg.SE31)
+SE.32<-left_join(SE.32, ldg.SE32)
+SE.33<-left_join(SE.33, ldg.SE33)
+SE.34<-left_join(SE.34, ldg.SE34)
+SE.35<-left_join(SE.35, ldg.SE35)
+## South Full
+# SF.31<-left_join(SF.31, ldg.SF31)
+SF.32<-left_join(SF.32, ldg.SF32)
+SF.33<-left_join(SF.33, ldg.SF33)
+SF.34<-left_join(SF.34, ldg.SF34)
+SF.35<-left_join(SF.35, ldg.SF35)
+```
+
+# AGV Calculations
+
+## North (1) Early (A)
+
+```{r North_Early_AGV, echo=FALSE, comment=NA, message=FALSE}
+## AGV Calculations:
+## NORTH EARLY
+### Field 11
+NE.AGV.F1<-NE.11
+NE.AGV.F1$yld<-as.numeric(NE.AGV.F1$yld)
+NE.AGV.F1$moist<-as.numeric(NE.AGV.F1$moist)
+NE.AGV.F1<-NE.AGV.F1%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+NE.AGV.F1<-NE.AGV.F1%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+NE.AGV.F1<-NE.AGV.F1%>%mutate(totalshrink=(moistureshrink+0.5))
+NE.AGV.F1<-NE.AGV.F1%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+NE.AGV.F1<-NE.AGV.F1%>%mutate(grossvalue=(dryyield*PPB))
+NE.AGV.F1<-NE.AGV.F1%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+NE.AGV.F1<-NE.AGV.F1%>%mutate(AGV=(grossvalue-dryingcost))
+NE.AGV.F1<-NE.AGV.F1[,c(5,23)]
+### Field 12
+NE.AGV.F2<-NE.12
+NE.AGV.F2$yld<-as.numeric(NE.AGV.F2$yld)
+NE.AGV.F2$moist<-as.numeric(NE.AGV.F2$moist)
+NE.AGV.F2<-NE.AGV.F2%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+NE.AGV.F2<-NE.AGV.F2%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+NE.AGV.F2<-NE.AGV.F2%>%mutate(totalshrink=(moistureshrink+0.5))
+NE.AGV.F2<-NE.AGV.F2%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+NE.AGV.F2<-NE.AGV.F2%>%mutate(grossvalue=(dryyield*PPB))
+NE.AGV.F2<-NE.AGV.F2%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+NE.AGV.F2<-NE.AGV.F2%>%mutate(AGV=(grossvalue-dryingcost))
+NE.AGV.F2<-NE.AGV.F2[,c(5,23)]
+### Field 13
+# NE.AGV.F3<-NE.13
+# NE.AGV.F3$yld<-as.numeric(NE.AGV.F3$yld)
+# NE.AGV.F3$moist<-as.numeric(NE.AGV.F3$moist)
+# NE.AGV.F3<-NE.AGV.F3%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+# NE.AGV.F3<-NE.AGV.F3%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+# NE.AGV.F3<-NE.AGV.F3%>%mutate(totalshrink=(moistureshrink+0.5))
+# NE.AGV.F3<-NE.AGV.F3%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+# NE.AGV.F3<-NE.AGV.F3%>%mutate(grossvalue=(dryyield*PPB))
+# NE.AGV.F3<-NE.AGV.F3%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+# NE.AGV.F3<-NE.AGV.F3%>%mutate(AGV=(grossvalue-dryingcost))
+# NE.AGV.F3<-NE.AGV.F3[,c(5,23)]
+### Field 14
+NE.AGV.F4<-NE.14
+NE.AGV.F4$yld<-as.numeric(NE.AGV.F4$yld)
+NE.AGV.F4$moist<-as.numeric(NE.AGV.F4$moist)
+NE.AGV.F4<-NE.AGV.F4%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+NE.AGV.F4<-NE.AGV.F4%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+NE.AGV.F4<-NE.AGV.F4%>%mutate(totalshrink=(moistureshrink+0.5))
+NE.AGV.F4<-NE.AGV.F4%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+NE.AGV.F4<-NE.AGV.F4%>%mutate(grossvalue=(dryyield*PPB))
+NE.AGV.F4<-NE.AGV.F4%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+NE.AGV.F4<-NE.AGV.F4%>%mutate(AGV=(grossvalue-dryingcost))
+NE.AGV.F4<-NE.AGV.F4[,c(5,23)]
+### Field 15
+NE.AGV.F5<-NE.15
+NE.AGV.F5$yld<-as.numeric(NE.AGV.F5$yld)
+NE.AGV.F5$moist<-as.numeric(NE.AGV.F5$moist)
+NE.AGV.F5<-NE.AGV.F5%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+NE.AGV.F5<-NE.AGV.F5%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+NE.AGV.F5<-NE.AGV.F5%>%mutate(totalshrink=(moistureshrink+0.5))
+NE.AGV.F5<-NE.AGV.F5%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+NE.AGV.F5<-NE.AGV.F5%>%mutate(grossvalue=(dryyield*PPB))
+NE.AGV.F5<-NE.AGV.F5%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+NE.AGV.F5<-NE.AGV.F5%>%mutate(AGV=(grossvalue-dryingcost))
+NE.AGV.F5<-NE.AGV.F5[,c(5,23)]
+```
+
+## North (1) Full (B)
+
+```{r North_Full_AGV, echo=FALSE, comment=NA, message=FALSE}
+## NORTH FULL
+### Field 1
+NF.AGV.F1<-NF.11
+NF.AGV.F1$yld<-as.numeric(NF.AGV.F1$yld)
+NF.AGV.F1$moist<-as.numeric(NF.AGV.F1$moist)
+NF.AGV.F1<-NF.AGV.F1%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+NF.AGV.F1<-NF.AGV.F1%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+NF.AGV.F1<-NF.AGV.F1%>%mutate(totalshrink=(moistureshrink+0.5))
+NF.AGV.F1<-NF.AGV.F1%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+NF.AGV.F1<-NF.AGV.F1%>%mutate(grossvalue=(dryyield*PPB))
+NF.AGV.F1<-NF.AGV.F1%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+NF.AGV.F1<-NF.AGV.F1%>%mutate(AGV=(grossvalue-dryingcost))
+NF.AGV.F1<-NF.AGV.F1[,c(5,23)]
+### Field 12
+NF.AGV.F2<-NF.12
+NF.AGV.F2$yld<-as.numeric(NF.AGV.F2$yld)
+NF.AGV.F2$moist<-as.numeric(NF.AGV.F2$moist)
+NF.AGV.F2<-NF.AGV.F2%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+NF.AGV.F2<-NF.AGV.F2%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+NF.AGV.F2<-NF.AGV.F2%>%mutate(totalshrink=(moistureshrink+0.5))
+NF.AGV.F2<-NF.AGV.F2%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+NF.AGV.F2<-NF.AGV.F2%>%mutate(grossvalue=(dryyield*PPB))
+NF.AGV.F2<-NF.AGV.F2%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+NF.AGV.F2<-NF.AGV.F2%>%mutate(AGV=(grossvalue-dryingcost))
+NF.AGV.F2<-NF.AGV.F2[,c(5,23)]
+### Field 13
+# NF.AGV.F3<-NF.13
+# NF.AGV.F3$yld<-as.numeric(NF.AGV.F3$yld)
+# NF.AGV.F3$moist<-as.numeric(NF.AGV.F3$moist)
+# NF.AGV.F3<-NF.AGV.F3%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+# NF.AGV.F3<-NF.AGV.F3%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+# NF.AGV.F3<-NF.AGV.F3%>%mutate(totalshrink=(moistureshrink+0.5))
+# NF.AGV.F3<-NF.AGV.F3%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+# NF.AGV.F3<-NF.AGV.F3%>%mutate(grossvalue=(dryyield*PPB))
+# NF.AGV.F3<-NF.AGV.F3%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+# NF.AGV.F3<-NF.AGV.F3%>%mutate(AGV=(grossvalue-dryingcost))
+# NF.AGV.F3<-NF.AGV.F3[,c(5,23)]
+### Field 14
+NF.AGV.F4<-NF.14
+NF.AGV.F4$yld<-as.numeric(NF.AGV.F4$yld)
+NF.AGV.F4$moist<-as.numeric(NF.AGV.F4$moist)
+NF.AGV.F4<-NF.AGV.F4%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+NF.AGV.F4<-NF.AGV.F4%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+NF.AGV.F4<-NF.AGV.F4%>%mutate(totalshrink=(moistureshrink+0.5))
+NF.AGV.F4<-NF.AGV.F4%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+NF.AGV.F4<-NF.AGV.F4%>%mutate(grossvalue=(dryyield*PPB))
+NF.AGV.F4<-NF.AGV.F4%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+NF.AGV.F4<-NF.AGV.F4%>%mutate(AGV=(grossvalue-dryingcost))
+NF.AGV.F4<-NF.AGV.F4[,c(5,23)]
+### Field 15
+NF.AGV.F5<-NF.15
+NF.AGV.F5$yld<-as.numeric(NF.AGV.F5$yld)
+NF.AGV.F5$moist<-as.numeric(NF.AGV.F5$moist)
+NF.AGV.F5<-NF.AGV.F5%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+NF.AGV.F5<-NF.AGV.F5%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+NF.AGV.F5<-NF.AGV.F5%>%mutate(totalshrink=(moistureshrink+0.5))
+NF.AGV.F5<-NF.AGV.F5%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+NF.AGV.F5<-NF.AGV.F5%>%mutate(grossvalue=(dryyield*PPB))
+NF.AGV.F5<-NF.AGV.F5%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+NF.AGV.F5<-NF.AGV.F5%>%mutate(AGV=(grossvalue-dryingcost))
+NF.AGV.F5<-NF.AGV.F5[,c(5,23)]
+```
+
+
+## Central (2) Early (A)
+
+```{r Central_Early_AGV, echo=FALSE, comment=NA, message=FALSE}
+## CENTRAL EARLY
+### Field 21
+# CE.AGV.F1<-CE.21
+# CE.AGV.F1$yld<-as.numeric(CE.AGV.F1$yld)
+# CE.AGV.F1$moist<-as.numeric(CE.AGV.F1$moist)
+# CE.AGV.F1<-CE.AGV.F1%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+# CE.AGV.F1<-CE.AGV.F1%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+# CE.AGV.F1<-CE.AGV.F1%>%mutate(totalshrink=(moistureshrink+0.5))
+# CE.AGV.F1<-CE.AGV.F1%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+# CE.AGV.F1<-CE.AGV.F1%>%mutate(grossvalue=(dryyield*PPB))
+# CE.AGV.F1<-CE.AGV.F1%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+# CE.AGV.F1<-CE.AGV.F1%>%mutate(AGV=(grossvalue-dryingcost))
+# CE.AGV.F1<-CE.AGV.F1[,c(5,23)]
+### Field 22
+CE.AGV.F2<-CE.22
+CE.AGV.F2$yld<-as.numeric(CE.AGV.F2$yld)
+CE.AGV.F2$moist<-as.numeric(CE.AGV.F2$moist)
+CE.AGV.F2<-CE.AGV.F2%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+CE.AGV.F2<-CE.AGV.F2%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+CE.AGV.F2<-CE.AGV.F2%>%mutate(totalshrink=(moistureshrink+0.5))
+CE.AGV.F2<-CE.AGV.F2%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+CE.AGV.F2<-CE.AGV.F2%>%mutate(grossvalue=(dryyield*PPB))
+CE.AGV.F2<-CE.AGV.F2%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+CE.AGV.F2<-CE.AGV.F2%>%mutate(AGV=(grossvalue-dryingcost))
+CE.AGV.F2<-CE.AGV.F2[,c(5,23)]
+### Field 23
+CE.AGV.F3<-CE.23
+CE.AGV.F3$yld<-as.numeric(CE.AGV.F3$yld)
+CE.AGV.F3$moist<-as.numeric(CE.AGV.F3$moist)
+CE.AGV.F3<-CE.AGV.F3%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+CE.AGV.F3<-CE.AGV.F3%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+CE.AGV.F3<-CE.AGV.F3%>%mutate(totalshrink=(moistureshrink+0.5))
+CE.AGV.F3<-CE.AGV.F3%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+CE.AGV.F3<-CE.AGV.F3%>%mutate(grossvalue=(dryyield*PPB))
+CE.AGV.F3<-CE.AGV.F3%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+CE.AGV.F3<-CE.AGV.F3%>%mutate(AGV=(grossvalue-dryingcost))
+CE.AGV.F3<-CE.AGV.F3[,c(5,23)]
+### Field 24
+CE.AGV.F4<-CE.24
+CE.AGV.F4$yld<-as.numeric(CE.AGV.F4$yld)
+CE.AGV.F4$moist<-as.numeric(CE.AGV.F4$moist)
+CE.AGV.F4<-CE.AGV.F4%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+CE.AGV.F4<-CE.AGV.F4%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+CE.AGV.F4<-CE.AGV.F4%>%mutate(totalshrink=(moistureshrink+0.5))
+CE.AGV.F4<-CE.AGV.F4%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+CE.AGV.F4<-CE.AGV.F4%>%mutate(grossvalue=(dryyield*PPB))
+CE.AGV.F4<-CE.AGV.F4%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+CE.AGV.F4<-CE.AGV.F4%>%mutate(AGV=(grossvalue-dryingcost))
+CE.AGV.F4<-CE.AGV.F4[,c(5,23)]
+### Field 25
+CE.AGV.F5<-CE.25
+CE.AGV.F5$yld<-as.numeric(CE.AGV.F5$yld)
+CE.AGV.F5$moist<-as.numeric(CE.AGV.F5$moist)
+CE.AGV.F5<-CE.AGV.F5%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+CE.AGV.F5<-CE.AGV.F5%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+CE.AGV.F5<-CE.AGV.F5%>%mutate(totalshrink=(moistureshrink+0.5))
+CE.AGV.F5<-CE.AGV.F5%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+CE.AGV.F5<-CE.AGV.F5%>%mutate(grossvalue=(dryyield*PPB))
+CE.AGV.F5<-CE.AGV.F5%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+CE.AGV.F5<-CE.AGV.F5%>%mutate(AGV=(grossvalue-dryingcost))
+CE.AGV.F5<-CE.AGV.F5[,c(5,23)]
+```
+
+## Central (2) Full (B)
+
+```{r Central_Full_AGV, echo=FALSE, comment=NA, message=FALSE}
+## CENTRAL FULL
+# CF.AGV.F1<-CF.21
+# CF.AGV.F1$yld<-as.numeric(CF.AGV.F1$yld)
+# CF.AGV.F1$moist<-as.numeric(CF.AGV.F1$moist)
+# CF.AGV.F1<-CF.AGV.F1%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+# CF.AGV.F1<-CF.AGV.F1%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+# CF.AGV.F1<-CF.AGV.F1%>%mutate(totalshrink=(moistureshrink+0.5))
+# CF.AGV.F1<-CF.AGV.F1%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+# CF.AGV.F1<-CF.AGV.F1%>%mutate(grossvalue=(dryyield*PPB))
+# CF.AGV.F1<-CF.AGV.F1%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+# CF.AGV.F1<-CF.AGV.F1%>%mutate(AGV=(grossvalue-dryingcost))
+# CF.AGV.F1<-CF.AGV.F1[,c(5,23)]
+### Field 22
+CF.AGV.F2<-CF.22
+CF.AGV.F2$yld<-as.numeric(CF.AGV.F2$yld)
+CF.AGV.F2$moist<-as.numeric(CF.AGV.F2$moist)
+CF.AGV.F2<-CF.AGV.F2%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+CF.AGV.F2<-CF.AGV.F2%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+CF.AGV.F2<-CF.AGV.F2%>%mutate(totalshrink=(moistureshrink+0.5))
+CF.AGV.F2<-CF.AGV.F2%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+CF.AGV.F2<-CF.AGV.F2%>%mutate(grossvalue=(dryyield*PPB))
+CF.AGV.F2<-CF.AGV.F2%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+CF.AGV.F2<-CF.AGV.F2%>%mutate(AGV=(grossvalue-dryingcost))
+CF.AGV.F2<-CF.AGV.F2[,c(5,23)]
+### Field 23
+CF.AGV.F3<-CF.23
+CF.AGV.F3$yld<-as.numeric(CF.AGV.F3$yld)
+CF.AGV.F3$moist<-as.numeric(CF.AGV.F3$moist)
+CF.AGV.F3<-CF.AGV.F3%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+CF.AGV.F3<-CF.AGV.F3%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+CF.AGV.F3<-CF.AGV.F3%>%mutate(totalshrink=(moistureshrink+0.5))
+CF.AGV.F3<-CF.AGV.F3%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+CF.AGV.F3<-CF.AGV.F3%>%mutate(grossvalue=(dryyield*PPB))
+CF.AGV.F3<-CF.AGV.F3%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+CF.AGV.F3<-CF.AGV.F3%>%mutate(AGV=(grossvalue-dryingcost))
+CF.AGV.F3<-CF.AGV.F3[,c(5,23)]
+### Field 24
+CF.AGV.F4<-CF.24
+CF.AGV.F4$yld<-as.numeric(CF.AGV.F4$yld)
+CF.AGV.F4$moist<-as.numeric(CF.AGV.F4$moist)
+CF.AGV.F4<-CF.AGV.F4%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+CF.AGV.F4<-CF.AGV.F4%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+CF.AGV.F4<-CF.AGV.F4%>%mutate(totalshrink=(moistureshrink+0.5))
+CF.AGV.F4<-CF.AGV.F4%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+CF.AGV.F4<-CF.AGV.F4%>%mutate(grossvalue=(dryyield*PPB))
+CF.AGV.F4<-CF.AGV.F4%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+CF.AGV.F4<-CF.AGV.F4%>%mutate(AGV=(grossvalue-dryingcost))
+CF.AGV.F4<-CF.AGV.F4[,c(5,23)]
+### Field 25
+CF.AGV.F5<-CF.25
+CF.AGV.F5$yld<-as.numeric(CF.AGV.F5$yld)
+CF.AGV.F5$moist<-as.numeric(CF.AGV.F5$moist)
+CF.AGV.F5<-CF.AGV.F5%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+CF.AGV.F5<-CF.AGV.F5%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+CF.AGV.F5<-CF.AGV.F5%>%mutate(totalshrink=(moistureshrink+0.5))
+CF.AGV.F5<-CF.AGV.F5%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+CF.AGV.F5<-CF.AGV.F5%>%mutate(grossvalue=(dryyield*PPB))
+CF.AGV.F5<-CF.AGV.F5%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+CF.AGV.F5<-CF.AGV.F5%>%mutate(AGV=(grossvalue-dryingcost))
+CF.AGV.F5<-CF.AGV.F5[,c(5,23)]
+```
+
+
+## South (3) Early (A)
+
+```{r South_Early_AGV, echo=FALSE, comment=NA, message=FALSE}
+## SOUTH EARLY
+### Field 31
+# SE.AGV.F1<-SE.31
+# SE.AGV.F1$yld<-as.numeric(SE.AGV.F1$yld)
+# SE.AGV.F1$moist<-as.numeric(SE.AGV.F1$moist)
+# SE.AGV.F1<-SE.AGV.F1%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+# SE.AGV.F1<-SE.AGV.F1%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+# SE.AGV.F1<-SE.AGV.F1%>%mutate(totalshrink=(moistureshrink+0.5))
+# SE.AGV.F1<-SE.AGV.F1%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+# SE.AGV.F1<-SE.AGV.F1%>%mutate(grossvalue=(dryyield*PPB))
+# SE.AGV.F1<-SE.AGV.F1%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+# SE.AGV.F1<-SE.AGV.F1%>%mutate(AGV=(grossvalue-dryingcost))
+# SE.AGV.F1<-SE.AGV.F1[,c(5,23)]
+### Field 32
+SE.AGV.F2<-SE.32
+SE.AGV.F2$yld<-as.numeric(SE.AGV.F2$yld)
+SE.AGV.F2$moist<-as.numeric(SE.AGV.F2$moist)
+SE.AGV.F2<-SE.AGV.F2%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+SE.AGV.F2<-SE.AGV.F2%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+SE.AGV.F2<-SE.AGV.F2%>%mutate(totalshrink=(moistureshrink+0.5))
+SE.AGV.F2<-SE.AGV.F2%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+SE.AGV.F2<-SE.AGV.F2%>%mutate(grossvalue=(dryyield*PPB))
+SE.AGV.F2<-SE.AGV.F2%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+SE.AGV.F2<-SE.AGV.F2%>%mutate(AGV=(grossvalue-dryingcost))
+SE.AGV.F2<-SE.AGV.F2[,c(5,23)]
+### Field 33
+SE.AGV.F3<-SE.33
+SE.AGV.F3$yld<-as.numeric(SE.AGV.F3$yld)
+SE.AGV.F3$moist<-as.numeric(SE.AGV.F3$moist)
+SE.AGV.F3<-SE.AGV.F3%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+SE.AGV.F3<-SE.AGV.F3%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+SE.AGV.F3<-SE.AGV.F3%>%mutate(totalshrink=(moistureshrink+0.5))
+SE.AGV.F3<-SE.AGV.F3%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+SE.AGV.F3<-SE.AGV.F3%>%mutate(grossvalue=(dryyield*PPB))
+SE.AGV.F3<-SE.AGV.F3%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+SE.AGV.F3<-SE.AGV.F3%>%mutate(AGV=(grossvalue-dryingcost))
+SE.AGV.F3<-SE.AGV.F3[,c(5,23)]
+### Field 34
+SE.AGV.F4<-SE.34
+SE.AGV.F4$yld<-as.numeric(SE.AGV.F4$yld)
+SE.AGV.F4$moist<-as.numeric(SE.AGV.F4$moist)
+SE.AGV.F4<-SE.AGV.F4%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+SE.AGV.F4<-SE.AGV.F4%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+SE.AGV.F4<-SE.AGV.F4%>%mutate(totalshrink=(moistureshrink+0.5))
+SE.AGV.F4<-SE.AGV.F4%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+SE.AGV.F4<-SE.AGV.F4%>%mutate(grossvalue=(dryyield*PPB))
+SE.AGV.F4<-SE.AGV.F4%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+SE.AGV.F4<-SE.AGV.F4%>%mutate(AGV=(grossvalue-dryingcost))
+SE.AGV.F4<-SE.AGV.F4[,c(5,23)]
+### Field 35
+SE.AGV.F5<-SE.35
+SE.AGV.F5$yld<-as.numeric(SE.AGV.F5$yld)
+SE.AGV.F5$moist<-as.numeric(SE.AGV.F5$moist)
+SE.AGV.F5<-SE.AGV.F5%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+SE.AGV.F5<-SE.AGV.F5%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+SE.AGV.F5<-SE.AGV.F5%>%mutate(totalshrink=(moistureshrink+0.5))
+SE.AGV.F5<-SE.AGV.F5%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+SE.AGV.F5<-SE.AGV.F5%>%mutate(grossvalue=(dryyield*PPB))
+SE.AGV.F5<-SE.AGV.F5%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+SE.AGV.F5<-SE.AGV.F5%>%mutate(AGV=(grossvalue-dryingcost))
+SE.AGV.F5<-SE.AGV.F5[,c(5,23)]
+```
+
+## South (3) Full (B)
+
+```{r South_Full_AGV, echo=FALSE, comment=NA, message=FALSE}
+## SOUTH FULL
+### Field 31
+# SF.AGV.F1<-SF.31
+# SF.AGV.F1$yld<-as.numeric(SF.AGV.F1$yld)
+# SF.AGV.F1$moist<-as.numeric(SF.AGV.F1$moist)
+# SF.AGV.F1<-SF.AGV.F1%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+# SF.AGV.F1<-SF.AGV.F1%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+# SF.AGV.F1<-SF.AGV.F1%>%mutate(totalshrink=(moistureshrink+0.5))
+# SF.AGV.F1<-SF.AGV.F1%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+# SF.AGV.F1<-SF.AGV.F1%>%mutate(grossvalue=(dryyield*PPB))
+# SF.AGV.F1<-SF.AGV.F1%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+# SF.AGV.F1<-SF.AGV.F1%>%mutate(AGV=(grossvalue-dryingcost))
+# SF.AGV.F1<-SF.AGV.F1[,c(5,23)]
+### Field 32
+SF.AGV.F2<-SF.32
+SF.AGV.F2$yld<-as.numeric(SF.AGV.F2$yld)
+SF.AGV.F2$moist<-as.numeric(SF.AGV.F2$moist)
+SF.AGV.F2<-SF.AGV.F2%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+SF.AGV.F2<-SF.AGV.F2%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+SF.AGV.F2<-SF.AGV.F2%>%mutate(totalshrink=(moistureshrink+0.5))
+SF.AGV.F2<-SF.AGV.F2%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+SF.AGV.F2<-SF.AGV.F2%>%mutate(grossvalue=(dryyield*PPB))
+SF.AGV.F2<-SF.AGV.F2%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+SF.AGV.F2<-SF.AGV.F2%>%mutate(AGV=(grossvalue-dryingcost))
+SF.AGV.F2<-SF.AGV.F2[,c(5,23)]
+### Field 33
+SF.AGV.F3<-SF.33
+SF.AGV.F3$yld<-as.numeric(SF.AGV.F3$yld)
+SF.AGV.F3$moist<-as.numeric(SF.AGV.F3$moist)
+SF.AGV.F3<-SF.AGV.F3%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+SF.AGV.F3<-SF.AGV.F3%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+SF.AGV.F3<-SF.AGV.F3%>%mutate(totalshrink=(moistureshrink+0.5))
+SF.AGV.F3<-SF.AGV.F3%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+SF.AGV.F3<-SF.AGV.F3%>%mutate(grossvalue=(dryyield*PPB))
+SF.AGV.F3<-SF.AGV.F3%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+SF.AGV.F3<-SF.AGV.F3%>%mutate(AGV=(grossvalue-dryingcost))
+SF.AGV.F3<-SF.AGV.F3[,c(5,23)]
+### Field 34
+SF.AGV.F4<-SF.34
+SF.AGV.F4$yld<-as.numeric(SF.AGV.F4$yld)
+SF.AGV.F4$moist<-as.numeric(SF.AGV.F4$moist)
+SF.AGV.F4<-SF.AGV.F4%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+SF.AGV.F4<-SF.AGV.F4%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+SF.AGV.F4<-SF.AGV.F4%>%mutate(totalshrink=(moistureshrink+0.5))
+SF.AGV.F4<-SF.AGV.F4%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+SF.AGV.F4<-SF.AGV.F4%>%mutate(grossvalue=(dryyield*PPB))
+SF.AGV.F4<-SF.AGV.F4%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+SF.AGV.F4<-SF.AGV.F4%>%mutate(AGV=(grossvalue-dryingcost))
+SF.AGV.F4<-SF.AGV.F4[,c(5,23)]
+### Field 35
+SF.AGV.F5<-SF.35
+SF.AGV.F5$yld<-as.numeric(SF.AGV.F5$yld)
+SF.AGV.F5$moist<-as.numeric(SF.AGV.F5$moist)
+SF.AGV.F5<-SF.AGV.F5%>%mutate(wetyield=((yld*84.5)/(100-moist)))
+SF.AGV.F5<-SF.AGV.F5%>%mutate(moistureshrink=(1.183*(moist-15.5)))
+SF.AGV.F5<-SF.AGV.F5%>%mutate(totalshrink=(moistureshrink+0.5))
+SF.AGV.F5<-SF.AGV.F5%>%mutate(dryyield=(((100-totalshrink)/100)*wetyield))
+SF.AGV.F5<-SF.AGV.F5%>%mutate(grossvalue=(dryyield*PPB))
+SF.AGV.F5<-SF.AGV.F5%>%mutate(dryingcost=(wetyield*(moist-15.5)*.06))
+SF.AGV.F5<-SF.AGV.F5%>%mutate(AGV=(grossvalue-dryingcost))
+SF.AGV.F5<-SF.AGV.F5[,c(5,23)]
+```
+
+
+## Add to Main Table
+
+```{r Combine_AGV, echo=FALSE, comment=NA, message=FALSE}
+## Combine with Main Table
+## NORTH
+## North Early
+NE.11<-left_join(NE.11, NE.AGV.F1)
+NE.12<-left_join(NE.12, NE.AGV.F2)
+# NE.13<-left_join(NE.13, NE.AGV.F3)
+NE.14<-left_join(NE.14, NE.AGV.F4)
+NE.15<-left_join(NE.15, NE.AGV.F5)
+## North Full
+NF.11<-left_join(NF.11, NF.AGV.F1)
+NF.12<-left_join(NF.12, NF.AGV.F2)
+# NF.13<-left_join(NF.13, NF.AGV.F3)
+NF.14<-left_join(NF.14, NF.AGV.F4)
+NF.15<-left_join(NF.15, NF.AGV.F5)
+
+## CENTRAL
+## Central Early
+# CE.21<-left_join(CE.21, CE.AGV.F1)
+CE.22<-left_join(CE.22, CE.AGV.F2)
+CE.23<-left_join(CE.23, CE.AGV.F3)
+CE.24<-left_join(CE.24, CE.AGV.F4)
+CE.25<-left_join(CE.25, CE.AGV.F5)
+## Central Full
+# CF.21<-left_join(CF.21, CF.AGV.F1)
+CF.22<-left_join(CF.22, CF.AGV.F2)
+CF.23<-left_join(CF.23, CF.AGV.F3)
+CF.24<-left_join(CF.24, CF.AGV.F4)
+CF.25<-left_join(CF.25, CF.AGV.F5)
+
+## SOUTH
+## South Early
+# SE.31<-left_join(SE.31, SE.AGV.F1)
+SE.32<-left_join(SE.32, SE.AGV.F2)
+SE.33<-left_join(SE.33, SE.AGV.F3)
+SE.34<-left_join(SE.34, SE.AGV.F4)
+SE.35<-left_join(SE.35, SE.AGV.F5)
+## South Full
+# SF.31<-left_join(SF.31, SF.AGV.F1)
+SF.32<-left_join(SF.32, SF.AGV.F2)
+SF.33<-left_join(SF.33, SF.AGV.F3)
+SF.34<-left_join(SF.34, SF.AGV.F4)
+SF.35<-left_join(SF.35, SF.AGV.F5)
+```
+
+# Format
+
+```{r Formatting, echo=FALSE, comment=NA, message=FALSE}
+##Final Formatting
+## NORTH
+## North Early
+NE.11<-NE.11[,c(1,2,6,7,8,9,11,10,12,15,16)]
+NE.12<-NE.12[,c(1,2,6,7,8,9,11,10,12,15,16)]
+# NE.13<-NE.13[,c(1,2,6,7,8,9,11,10,12,15,16)]
+NE.14<-NE.14[,c(1,2,6,7,8,9,11,10,12,15,16)]
+NE.15<-NE.15[,c(1,2,6,7,8,9,11,10,12,15,16)]
+## North Full
+NF.11<-NF.11[,c(1,2,6,7,8,9,11,10,12,15,16)]
+NF.12<-NF.12[,c(1,2,6,7,8,9,11,10,12,15,16)]
+# NF.13<-NF.13[,c(1,2,6,7,8,9,11,10,12,15,16)]
+NF.14<-NF.14[,c(1,2,6,7,8,9,11,10,12,15,16)]
+NF.15<-NF.15[,c(1,2,6,7,8,9,11,10,12,15,16)]
+
+## CENTRAL
+## Central Early
+# CE.21<-CE.21[,c(1,2,6,7,8,9,11,10,12,15,16)]
+CE.22<-CE.22[,c(1,2,6,7,8,9,11,10,12,15,16)]
+CE.23<-CE.23[,c(1,2,6,7,8,9,11,10,12,15,16)]
+CE.24<-CE.24[,c(1,2,6,7,8,9,11,10,12,15,16)]
+CE.25<-CE.25[,c(1,2,6,7,8,9,11,10,12,15,16)]
+## Central Full
+# CF.21<-CF.21[,c(1,2,6,7,8,9,11,10,12,15,16)]
+CF.22<-CF.22[,c(1,2,6,7,8,9,11,10,12,15,16)]
+CF.23<-CF.23[,c(1,2,6,7,8,9,11,10,12,15,16)]
+CF.24<-CF.24[,c(1,2,6,7,8,9,11,10,12,15,16)]
+CF.25<-CF.25[,c(1,2,6,7,8,9,11,10,12,15,16)]
+
+## SOUTH
+## South Early
+# SE.31<-SE.31[,c(1,2,6,7,8,9,11,10,12,15,16)]
+SE.32<-SE.32[,c(1,2,6,7,8,9,11,10,12,15,16)]
+SE.33<-SE.33[,c(1,2,6,7,8,9,11,10,12,15,16)]
+SE.34<-SE.34[,c(1,2,6,7,8,9,11,10,12,15,16)]
+SE.35<-SE.35[,c(1,2,6,7,8,9,11,10,12,15,16)]
+## South Full
+# SF.31<-SF.31[,c(1,2,6,7,8,9,11,10,12,15,16)]
+SF.32<-SF.32[,c(1,2,6,7,8,9,11,10,12,15,16)]
+SF.33<-SF.33[,c(1,2,6,7,8,9,11,10,12,15,16)]
+SF.34<-SF.34[,c(1,2,6,7,8,9,11,10,12,15,16)]
+SF.35<-SF.35[,c(1,2,6,7,8,9,11,10,12,15,16)]
+```
+
+# Sort
+
+```{r Sorting, echo=FALSE, comment=NA, message=FALSE}
+## Sort By Rank
+## NORTH
+## North Early
+NE.11<-NE.11[order(NE.11$yld.rank),]
+NE.12<-NE.12[order(NE.12$yld.rank),]
+# NE.13<-NE.13[order(NE.13$yld.rank),]
+NE.14<-NE.14[order(NE.14$yld.rank),]
+NE.15<-NE.15[order(NE.15$yld.rank),]
+## North Full
+NF.11<-NF.11[order(NF.11$yld.rank),]
+NF.12<-NF.12[order(NF.12$yld.rank),]
+# NF.13<-NF.13[order(NF.13$yld.rank),]
+NF.14<-NF.14[order(NF.14$yld.rank),]
+NF.15<-NF.15[order(NF.15$yld.rank),]
+
+## CENTRAL
+## Central Early
+# CE.21<-CE.21[order(CE.21$yld.rank),]
+CE.22<-CE.22[order(CE.22$yld.rank),]
+CE.23<-CE.23[order(CE.23$yld.rank),]
+CE.24<-CE.24[order(CE.24$yld.rank),]
+CE.25<-CE.25[order(CE.25$yld.rank),]
+## Central Full
+# CF.21<-CF.21[order(CF.21$yld.rank),]
+CF.22<-CF.22[order(CF.22$yld.rank),]
+CF.23<-CF.23[order(CF.23$yld.rank),]
+CF.24<-CF.24[order(CF.24$yld.rank),]
+CF.25<-CF.25[order(CF.25$yld.rank),]
+
+## SOUTH
+## South Early
+# SE.31<-SE.31[order(SE.31$yld.rank),]
+SE.32<-SE.32[order(SE.32$yld.rank),]
+SE.33<-SE.33[order(SE.33$yld.rank),]
+SE.34<-SE.34[order(SE.34$yld.rank),]
+SE.35<-SE.35[order(SE.35$yld.rank),]
+## South Full
+# SF.31<-SF.31[order(SF.31$yld.rank),]
+SF.32<-SF.32[order(SF.32$yld.rank),]
+SF.33<-SF.33[order(SF.33$yld.rank),]
+SF.34<-SF.34[order(SF.34$yld.rank),]
+SF.35<-SF.35[order(SF.35$yld.rank),]
+```
+
+
+# Summary Statistics Table
+
+## North (1) Early (A)
+
+### Field 11
+
+```{r NE1_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+NE.11.Mean<-mean(NE.11$F1)
+NE.11.Min<-min(NE.11$F1)
+NE.11.Max<-max(NE.11$F1)
+NE.11.CV<-CV(NE.model1)
+NE.11.lsd<-predictmeans(NE.model1, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NE.11.LSD<-NE.11.lsd[["LSD"]][["Aveg.LSD"]]
+NE.11.MSE<-mean(residuals(NE.model1)^2)
+## Moisture
+NE.11.Moist.Mean<-mean(NE.11$moist)
+NE.11.Moist.Min<-min(NE.11$moist)
+NE.11.Moist.Max<-max(NE.11$moist)
+NE.11.Moist.lsd<-predictmeans(NE.model.moist1, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NE.11.Moist.LSD<-NE.11.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+NE.11.LDG.Mean<-mean(NE.11$tldg)
+NE.11.LDG.Min<-min(NE.11$tldg)
+NE.11.LDG.Max<-max(NE.11$tldg)
+## AGV
+NE.11.AGV.Mean<-mean(NE.11$AGV)
+NE.11.AGV.Min<-min(NE.11$AGV)
+NE.11.AGV.Max<-max(NE.11$AGV)
+
+## Summary Statistics Table:
+NE.11.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(NE.11.Mean, NE.11.Min, NE.11.Max, NE.11.LSD, NE.11.MSE, NE.11.CV)), "moistM" = as.numeric(c(NE.11.Moist.Mean, NE.11.Moist.Min, NE.11.Moist.Max, NE.11.Moist.LSD, "", "")), "TLDG" = as.numeric(c(NE.11.LDG.Mean, NE.11.LDG.Min, NE.11.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(NE.11.AGV.Mean, NE.11.AGV.Min, NE.11.AGV.Max, "", "", "")))
+
+## Round Digits:
+NE.11.Stats$moistM<-as.numeric(NE.11.Stats$moistM)
+NE.11.Stats$AGVM<-as.numeric(NE.11.Stats$AGVM)
+NE.11.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+NE.11.Stats<-data.frame(append(NE.11.Stats, list(hybrid= ""), after =  1))
+NE.11.Stats<-data.frame(append(NE.11.Stats, list(seedtrt= ""), after =  2))
+NE.11.Stats<-data.frame(append(NE.11.Stats, list(pkg= ""), after =  3))
+NE.11.Stats<-data.frame(append(NE.11.Stats, list(herb= ""), after =  4))
+NE.11.Stats<-data.frame(append(NE.11.Stats, list(rank= ""), after =  6))
+NE.11.Stats<-data.frame(append(NE.11.Stats, list(percent= ""), after =  7))
+```
+
+### Field 12
+
+```{r NE2_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+NE.12.Mean<-mean(NE.12$F2)
+NE.12.Min<-min(NE.12$F2)
+NE.12.Max<-max(NE.12$F2)
+NE.12.CV<-CV(NE.model2)
+NE.12.lsd<-predictmeans(NE.model2, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NE.12.LSD<-NE.12.lsd[["LSD"]][["Aveg.LSD"]]
+NE.12.MSE<-mean(residuals(NE.model2)^2)
+## Moisture
+NE.12.Moist.Mean<-mean(NE.12$moist)
+NE.12.Moist.Min<-min(NE.12$moist)
+NE.12.Moist.Max<-max(NE.12$moist)
+NE.12.Moist.lsd<-predictmeans(NE.model.moist2, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NE.12.Moist.LSD<-NE.12.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+NE.12.LDG.Mean<-mean(NE.12$tldg)
+NE.12.LDG.Min<-min(NE.12$tldg)
+NE.12.LDG.Max<-max(NE.12$tldg)
+## AGV
+NE.12.AGV.Mean<-mean(NE.12$AGV)
+NE.12.AGV.Min<-min(NE.12$AGV)
+NE.12.AGV.Max<-max(NE.12$AGV)
+
+## Summary Statistics Table:
+NE.12.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(NE.12.Mean, NE.12.Min, NE.12.Max, NE.12.LSD, NE.12.MSE, NE.12.CV)), "moistM" = as.numeric(c(NE.12.Moist.Mean, NE.12.Moist.Min, NE.12.Moist.Max, NE.12.Moist.LSD, "", "")), "TLDG" = as.numeric(c(NE.12.LDG.Mean, NE.12.LDG.Min, NE.12.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(NE.12.AGV.Mean, NE.12.AGV.Min, NE.12.AGV.Max, "", "", "")))
+
+## Round Digits:
+NE.12.Stats$moistM<-as.numeric(NE.12.Stats$moistM)
+NE.12.Stats$AGVM<-as.numeric(NE.12.Stats$AGVM)
+NE.12.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+NE.12.Stats<-data.frame(append(NE.12.Stats, list(hybrid= ""), after =  1))
+NE.12.Stats<-data.frame(append(NE.12.Stats, list(seedtrt= ""), after =  2))
+NE.12.Stats<-data.frame(append(NE.12.Stats, list(pkg= ""), after =  3))
+NE.12.Stats<-data.frame(append(NE.12.Stats, list(herb= ""), after =  4))
+NE.12.Stats<-data.frame(append(NE.12.Stats, list(rank= ""), after =  6))
+NE.12.Stats<-data.frame(append(NE.12.Stats, list(percent= ""), after =  7))
+```
+
+<!-- ### Field 13 -->
+
+<!-- ```{r NE3_Stats.Table, comment=NA, echo=FALSE, message=FALSE} -->
+<!-- ## Yield -->
+<!-- NE.13.Mean<-mean(NE.13$.F3) -->
+<!-- NE.13.Min<-min(NE.13$.F3) -->
+<!-- NE.13.Max<-max(NE.13$.F3) -->
+<!-- NE.13.CV<-CV(NE.model3) -->
+<!-- NE.13.lsd<-predictmeans(NE.model3, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE) -->
+<!-- NE.13.LSD<-NE.13.lsd[["LSD"]][["Aveg.LSD"]] -->
+<!-- NE.13.MSE<-mean(residuals(NE.model3)^2) -->
+<!-- ## Moisture -->
+<!-- NE.13.Moist.Mean<-mean(NE.13$moist) -->
+<!-- NE.13.Moist.Min<-min(NE.13$moist) -->
+<!-- NE.13.Moist.Max<-max(NE.13$moist) -->
+<!-- NE.13.Moist.lsd<-predictmeans(NE.model.moist3, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE) -->
+<!-- NE.13.Moist.LSD<-NE.13.Moist.lsd[["LSD"]][["Aveg.LSD"]] -->
+<!-- ## Lodging -->
+<!-- NE.13.LDG.Mean<-mean(NE.13$tldg) -->
+<!-- NE.13.LDG.Min<-min(NE.13$tldg) -->
+<!-- NE.13.LDG.Max<-max(NE.13$tldg) -->
+<!-- ## AGV -->
+<!-- NE.13.AGV.Mean<-mean(NE.13$AGV) -->
+<!-- NE.13.AGV.Min<-min(NE.13$AGV) -->
+<!-- NE.13.AGV.Max<-max(NE.13$AGV) -->
+
+<!-- ## Summary Statistics Table: -->
+<!-- NE.13.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(NE.13.Mean, NE.13.Min, NE.13.Max, NE.13.LSD, NE.13.MSE, NE.13.CV)), "moistM" = as.numeric(c(NE.13.Moist.Mean, NE.13.Moist.Min, NE.13.Moist.Max, NE.13.Moist.LSD, "", "")), "TLDG" = as.numeric(c(NE.13.LDG.Mean, NE.13.LDG.Min, NE.13.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(NE.13.AGV.Mean, NE.13.AGV.Min, NE.13.AGV.Max, "", "", ""))) -->
+
+<!-- ## Round Digits: -->
+<!-- NE.13.Stats$moistM<-as.numeric(NE.13.Stats$moistM) -->
+<!-- NE.13.Stats$AGVM<-as.numeric(NE.13.Stats$AGVM) -->
+<!-- NE.13.Stats%>%mutate_if(is.numeric, round, digits=2) -->
+
+<!-- ## Add Blank Columns: -->
+<!-- NE.13.Stats<-data.frame(append(NE.13.Stats, list(hybrid= ""), after =  1)) -->
+<!-- NE.13.Stats<-data.frame(append(NE.13.Stats, list(seedtrt= ""), after =  2)) -->
+<!-- NE.13.Stats<-data.frame(append(NE.13.Stats, list(pkg= ""), after =  3)) -->
+<!-- NE.13.Stats<-data.frame(append(NE.13.Stats, list(herb= ""), after =  4)) -->
+<!-- NE.13.Stats<-data.frame(append(NE.13.Stats, list(rank= ""), after =  6)) -->
+<!-- NE.13.Stats<-data.frame(append(NE.13.Stats, list(percent= ""), after =  7)) -->
+<!-- ``` -->
+
+### Field 14
+
+```{r NE4_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+NE.14.Mean<-mean(NE.14$.F4)
+NE.14.Min<-min(NE.14$.F4)
+NE.14.Max<-max(NE.14$.F4)
+NE.14.CV<-CV(NE.model4)
+NE.14.lsd<-predictmeans(NE.model4, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NE.14.LSD<-NE.14.lsd[["LSD"]][["Aveg.LSD"]]
+NE.14.MSE<-mean(residuals(NE.model4)^2)
+## Moisture
+NE.14.Moist.Mean<-mean(NE.14$moist)
+NE.14.Moist.Min<-min(NE.14$moist)
+NE.14.Moist.Max<-max(NE.14$moist)
+NE.14.Moist.lsd<-predictmeans(NE.model.moist4, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NE.14.Moist.LSD<-NE.14.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+NE.14.LDG.Mean<-mean(NE.14$tldg)
+NE.14.LDG.Min<-min(NE.14$tldg)
+NE.14.LDG.Max<-max(NE.14$tldg)
+## AGV
+NE.14.AGV.Mean<-mean(NE.14$AGV)
+NE.14.AGV.Min<-min(NE.14$AGV)
+NE.14.AGV.Max<-max(NE.14$AGV)
+
+## Summary Statistics Table:
+NE.14.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(NE.14.Mean, NE.14.Min, NE.14.Max, NE.14.LSD, NE.14.MSE, NE.14.CV)), "moistM" = as.numeric(c(NE.14.Moist.Mean, NE.14.Moist.Min, NE.14.Moist.Max, NE.14.Moist.LSD, "", "")), "TLDG" = as.numeric(c(NE.14.LDG.Mean, NE.14.LDG.Min, NE.14.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(NE.14.AGV.Mean, NE.14.AGV.Min, NE.14.AGV.Max, "", "", "")))
+
+## Round Digits:
+NE.14.Stats$moistM<-as.numeric(NE.14.Stats$moistM)
+NE.14.Stats$AGVM<-as.numeric(NE.14.Stats$AGVM)
+NE.14.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+NE.14.Stats<-data.frame(append(NE.14.Stats, list(hybrid= ""), after =  1))
+NE.14.Stats<-data.frame(append(NE.14.Stats, list(seedtrt= ""), after =  2))
+NE.14.Stats<-data.frame(append(NE.14.Stats, list(pkg= ""), after =  3))
+NE.14.Stats<-data.frame(append(NE.14.Stats, list(herb= ""), after =  4))
+NE.14.Stats<-data.frame(append(NE.14.Stats, list(rank= ""), after =  6))
+NE.14.Stats<-data.frame(append(NE.14.Stats, list(percent= ""), after =  7))
+```
+
+### Field 15
+
+```{r NE4_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+NE.15.Mean<-mean(NE.15$.F5)
+NE.15.Min<-min(NE.15$.F5)
+NE.15.Max<-max(NE.15$.F5)
+NE.15.CV<-CV(NE.model5)
+NE.15.lsd<-predictmeans(NE.model5, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NE.15.LSD<-NE.15.lsd[["LSD"]][["Aveg.LSD"]]
+NE.15.MSE<-mean(residuals(NE.model5)^2)
+## Moisture
+NE.15.Moist.Mean<-mean(NE.15$moist)
+NE.15.Moist.Min<-min(NE.15$moist)
+NE.15.Moist.Max<-max(NE.15$moist)
+NE.15.Moist.lsd<-predictmeans(NE.model.moist5, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NE.15.Moist.LSD<-NE.15.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+NE.15.LDG.Mean<-mean(NE.15$tldg)
+NE.15.LDG.Min<-min(NE.15$tldg)
+NE.15.LDG.Max<-max(NE.15$tldg)
+## AGV
+NE.15.AGV.Mean<-mean(NE.15$AGV)
+NE.15.AGV.Min<-min(NE.15$AGV)
+NE.15.AGV.Max<-max(NE.15$AGV)
+
+## Summary Statistics Table:
+NE.15.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(NE.15.Mean, NE.15.Min, NE.15.Max, NE.15.LSD, NE.15.MSE, NE.15.CV)), "moistM" = as.numeric(c(NE.15.Moist.Mean, NE.15.Moist.Min, NE.15.Moist.Max, NE.15.Moist.LSD, "", "")), "TLDG" = as.numeric(c(NE.15.LDG.Mean, NE.15.LDG.Min, NE.15.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(NE.15.AGV.Mean, NE.15.AGV.Min, NE.15.AGV.Max, "", "", "")))
+
+## Round Digits:
+NE.15.Stats$moistM<-as.numeric(NE.15.Stats$moistM)
+NE.15.Stats$AGVM<-as.numeric(NE.15.Stats$AGVM)
+NE.15.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+NE.15.Stats<-data.frame(append(NE.15.Stats, list(hybrid= ""), after =  1))
+NE.15.Stats<-data.frame(append(NE.15.Stats, list(seedtrt= ""), after =  2))
+NE.15.Stats<-data.frame(append(NE.15.Stats, list(pkg= ""), after =  3))
+NE.15.Stats<-data.frame(append(NE.15.Stats, list(herb= ""), after =  4))
+NE.15.Stats<-data.frame(append(NE.15.Stats, list(rank= ""), after =  6))
+NE.15.Stats<-data.frame(append(NE.15.Stats, list(percent= ""), after =  7))
+```
+
+## North (1) Full (B)
+
+### Field 11
+
+```{r NF1_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+NF.11.Mean<-mean(NF.11$F1)
+NF.11.Min<-min(NF.11$F1)
+NF.11.Max<-max(NF.11$F1)
+NF.11.CV<-CV(NF.model1)
+NF.11.lsd<-predictmeans(NF.model1, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NF.11.LSD<-NF.11.lsd[["LSD"]][["Aveg.LSD"]]
+NF.11.MSE<-mean(residuals(NF.model1)^2)
+## Moisture
+NF.11.Moist.Mean<-mean(NF.11$moist)
+NF.11.Moist.Min<-min(NF.11$moist)
+NF.11.Moist.Max<-max(NF.11$moist)
+NF.11.Moist.lsd<-predictmeans(NF.model.moist1, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NF.11.Moist.LSD<-NF.11.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+NF.11.LDG.Mean<-mean(NF.11$tldg)
+NF.11.LDG.Min<-min(NF.11$tldg)
+NF.11.LDG.Max<-max(NF.11$tldg)
+## AGV
+NF.11.AGV.Mean<-mean(NF.11$AGV)
+NF.11.AGV.Min<-min(NF.11$AGV)
+NF.11.AGV.Max<-max(NF.11$AGV)
+
+## Summary Statistics Table:
+NF.11.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(NF.11.Mean, NF.11.Min, NF.11.Max, NF.11.LSD, NF.11.MSE, NF.11.CV)), "moistM" = as.numeric(c(NF.11.Moist.Mean, NF.11.Moist.Min, NF.11.Moist.Max, NF.11.Moist.LSD, "", "")), "TLDG" = as.numeric(c(NF.11.LDG.Mean, NF.11.LDG.Min, NF.11.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(NF.11.AGV.Mean, NF.11.AGV.Min, NF.11.AGV.Max, "", "", "")))
+
+## Round Digits:
+NF.11.Stats$moistM<-as.numeric(NF.11.Stats$moistM)
+NF.11.Stats$AGVM<-as.numeric(NF.11.Stats$AGVM)
+NF.11.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+NF.11.Stats<-data.frame(append(NF.11.Stats, list(hybrid= ""), after =  1))
+NF.11.Stats<-data.frame(append(NF.11.Stats, list(seedtrt= ""), after =  2))
+NF.11.Stats<-data.frame(append(NF.11.Stats, list(pkg= ""), after =  3))
+NF.11.Stats<-data.frame(append(NF.11.Stats, list(herb= ""), after =  4))
+NF.11.Stats<-data.frame(append(NF.11.Stats, list(rank= ""), after =  6))
+NF.11.Stats<-data.frame(append(NF.11.Stats, list(percent= ""), after =  7))
+```
+
+### Field 12
+
+```{r NF2_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+NF.12.Mean<-mean(NF.12$F2)
+NF.12.Min<-min(NF.12$F2)
+NF.12.Max<-max(NF.12$F2)
+NF.12.CV<-CV(NF.model2)
+NF.12.lsd<-predictmeans(NF.model2, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NF.12.LSD<-NF.12.lsd[["LSD"]][["Aveg.LSD"]]
+NF.12.MSE<-mean(residuals(NF.model2)^2)
+## Moisture
+NF.12.Moist.Mean<-mean(NF.12$moist)
+NF.12.Moist.Min<-min(NF.12$moist)
+NF.12.Moist.Max<-max(NF.12$moist)
+NF.12.Moist.lsd<-predictmeans(NF.model.moist2, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NF.12.Moist.LSD<-NF.12.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+NF.12.LDG.Mean<-mean(NF.12$tldg)
+NF.12.LDG.Min<-min(NF.12$tldg)
+NF.12.LDG.Max<-max(NF.12$tldg)
+## AGV
+NF.12.AGV.Mean<-mean(NF.12$AGV)
+NF.12.AGV.Min<-min(NF.12$AGV)
+NF.12.AGV.Max<-max(NF.12$AGV)
+
+## Summary Statistics Table:
+NF.12.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(NF.12.Mean, NF.12.Min, NF.12.Max, NF.12.LSD, NF.12.MSE, NF.12.CV)), "moistM" = as.numeric(c(NF.12.Moist.Mean, NF.12.Moist.Min, NF.12.Moist.Max, NF.12.Moist.LSD, "", "")), "TLDG" = as.numeric(c(NF.12.LDG.Mean, NF.12.LDG.Min, NF.12.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(NF.12.AGV.Mean, NF.12.AGV.Min, NF.12.AGV.Max, "", "", "")))
+
+## Round Digits:
+NF.12.Stats$moistM<-as.numeric(NF.12.Stats$moistM)
+NF.12.Stats$AGVM<-as.numeric(NF.12.Stats$AGVM)
+NF.12.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+NF.12.Stats<-data.frame(append(NF.12.Stats, list(hybrid= ""), after =  1))
+NF.12.Stats<-data.frame(append(NF.12.Stats, list(seedtrt= ""), after =  2))
+NF.12.Stats<-data.frame(append(NF.12.Stats, list(pkg= ""), after =  3))
+NF.12.Stats<-data.frame(append(NF.12.Stats, list(herb= ""), after =  4))
+NF.12.Stats<-data.frame(append(NF.12.Stats, list(rank= ""), after =  6))
+NF.12.Stats<-data.frame(append(NF.12.Stats, list(percent= ""), after =  7))
+```
+
+<!-- ### Field 13 -->
+
+<!-- ```{r NF3_Stats.Table, comment=NA, echo=FALSE, message=FALSE} -->
+<!-- ## Yield -->
+<!-- NF.13.Mean<-mean(NF.13$.F3) -->
+<!-- NF.13.Min<-min(NF.13$.F3) -->
+<!-- NF.13.Max<-max(NF.13$.F3) -->
+<!-- NF.13.CV<-CV(NF.model3) -->
+<!-- NF.13.lsd<-predictmeans(NF.model3, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE) -->
+<!-- NF.13.LSD<-NF.13.lsd[["LSD"]][["Aveg.LSD"]] -->
+<!-- NF.13.MSE<-mean(residuals(NF.model3)^2) -->
+<!-- ## Moisture -->
+<!-- NF.13.Moist.Mean<-mean(NF.13$moist) -->
+<!-- NF.13.Moist.Min<-min(NF.13$moist) -->
+<!-- NF.13.Moist.Max<-max(NF.13$moist) -->
+<!-- NF.13.Moist.lsd<-predictmeans(NF.model.moist3, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE) -->
+<!-- NF.13.Moist.LSD<-NF.13.Moist.lsd[["LSD"]][["Aveg.LSD"]] -->
+<!-- ## Lodging -->
+<!-- NF.13.LDG.Mean<-mean(NF.13$tldg) -->
+<!-- NF.13.LDG.Min<-min(NF.13$tldg) -->
+<!-- NF.13.LDG.Max<-max(NF.13$tldg) -->
+<!-- ## AGV -->
+<!-- NF.13.AGV.Mean<-mean(NF.13$AGV) -->
+<!-- NF.13.AGV.Min<-min(NF.13$AGV) -->
+<!-- NF.13.AGV.Max<-max(NF.13$AGV) -->
+
+<!-- ## Summary Statistics Table: -->
+<!-- NF.13.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(NF.13.Mean, NF.13.Min, NF.13.Max, NF.13.LSD, NF.13.MSE, NF.13.CV)), "moistM" = as.numeric(c(NF.13.Moist.Mean, NF.13.Moist.Min, NF.13.Moist.Max, NF.13.Moist.LSD, "", "")), "TLDG" = as.numeric(c(NF.13.LDG.Mean, NF.13.LDG.Min, NF.13.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(NF.13.AGV.Mean, NF.13.AGV.Min, NF.13.AGV.Max, "", "", ""))) -->
+
+<!-- ## Round Digits: -->
+<!-- NF.13.Stats$moistM<-as.numeric(NF.13.Stats$moistM) -->
+<!-- NF.13.Stats$AGVM<-as.numeric(NF.13.Stats$AGVM) -->
+<!-- NF.13.Stats%>%mutate_if(is.numeric, round, digits=2) -->
+
+<!-- ## Add Blank Columns: -->
+<!-- NF.13.Stats<-data.frame(append(NF.13.Stats, list(hybrid= ""), after =  1)) -->
+<!-- NF.13.Stats<-data.frame(append(NF.13.Stats, list(seedtrt= ""), after =  2)) -->
+<!-- NF.13.Stats<-data.frame(append(NF.13.Stats, list(pkg= ""), after =  3)) -->
+<!-- NF.13.Stats<-data.frame(append(NF.13.Stats, list(herb= ""), after =  4)) -->
+<!-- NF.13.Stats<-data.frame(append(NF.13.Stats, list(rank= ""), after =  6)) -->
+<!-- NF.13.Stats<-data.frame(append(NF.13.Stats, list(percent= ""), after =  7)) -->
+<!-- ``` -->
+
+### Field 14
+
+```{r NF4_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+NF.14.Mean<-mean(NF.14$.F4)
+NF.14.Min<-min(NF.14$.F4)
+NF.14.Max<-max(NF.14$.F4)
+NF.14.CV<-CV(NF.model4)
+NF.14.lsd<-predictmeans(NF.model4, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NF.14.LSD<-NF.14.lsd[["LSD"]][["Aveg.LSD"]]
+NF.14.MSE<-mean(residuals(NF.model4)^2)
+## Moisture
+NF.14.Moist.Mean<-mean(NF.14$moist)
+NF.14.Moist.Min<-min(NF.14$moist)
+NF.14.Moist.Max<-max(NF.14$moist)
+NF.14.Moist.lsd<-predictmeans(NF.model.moist4, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NF.14.Moist.LSD<-NF.14.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+NF.14.LDG.Mean<-mean(NF.14$tldg)
+NF.14.LDG.Min<-min(NF.14$tldg)
+NF.14.LDG.Max<-max(NF.14$tldg)
+## AGV
+NF.14.AGV.Mean<-mean(NF.14$AGV)
+NF.14.AGV.Min<-min(NF.14$AGV)
+NF.14.AGV.Max<-max(NF.14$AGV)
+
+## Summary Statistics Table:
+NF.14.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(NF.14.Mean, NF.14.Min, NF.14.Max, NF.14.LSD, NF.14.MSE, NF.14.CV)), "moistM" = as.numeric(c(NF.14.Moist.Mean, NF.14.Moist.Min, NF.14.Moist.Max, NF.14.Moist.LSD, "", "")), "TLDG" = as.numeric(c(NF.14.LDG.Mean, NF.14.LDG.Min, NF.14.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(NF.14.AGV.Mean, NF.14.AGV.Min, NF.14.AGV.Max, "", "", "")))
+
+## Round Digits:
+NF.14.Stats$moistM<-as.numeric(NF.14.Stats$moistM)
+NF.14.Stats$AGVM<-as.numeric(NF.14.Stats$AGVM)
+NF.14.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+NF.14.Stats<-data.frame(append(NF.14.Stats, list(hybrid= ""), after =  1))
+NF.14.Stats<-data.frame(append(NF.14.Stats, list(seedtrt= ""), after =  2))
+NF.14.Stats<-data.frame(append(NF.14.Stats, list(pkg= ""), after =  3))
+NF.14.Stats<-data.frame(append(NF.14.Stats, list(herb= ""), after =  4))
+NF.14.Stats<-data.frame(append(NF.14.Stats, list(rank= ""), after =  6))
+NF.14.Stats<-data.frame(append(NF.14.Stats, list(percent= ""), after =  7))
+```
+
+### Field 15
+
+```{r NF4_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+NF.15.Mean<-mean(NF.15$.F5)
+NF.15.Min<-min(NF.15$.F5)
+NF.15.Max<-max(NF.15$.F5)
+NF.15.CV<-CV(NF.model5)
+NF.15.lsd<-predictmeans(NF.model5, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NF.15.LSD<-NF.15.lsd[["LSD"]][["Aveg.LSD"]]
+NF.15.MSE<-mean(residuals(NF.model5)^2)
+## Moisture
+NF.15.Moist.Mean<-mean(NF.15$moist)
+NF.15.Moist.Min<-min(NF.15$moist)
+NF.15.Moist.Max<-max(NF.15$moist)
+NF.15.Moist.lsd<-predictmeans(NF.model.moist5, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NF.15.Moist.LSD<-NF.15.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+NF.15.LDG.Mean<-mean(NF.15$tldg)
+NF.15.LDG.Min<-min(NF.15$tldg)
+NF.15.LDG.Max<-max(NF.15$tldg)
+## AGV
+NF.15.AGV.Mean<-mean(NF.15$AGV)
+NF.15.AGV.Min<-min(NF.15$AGV)
+NF.15.AGV.Max<-max(NF.15$AGV)
+
+## Summary Statistics Table:
+NF.15.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(NF.15.Mean, NF.15.Min, NF.15.Max, NF.15.LSD, NF.15.MSE, NF.15.CV)), "moistM" = as.numeric(c(NF.15.Moist.Mean, NF.15.Moist.Min, NF.15.Moist.Max, NF.15.Moist.LSD, "", "")), "TLDG" = as.numeric(c(NF.15.LDG.Mean, NF.15.LDG.Min, NF.15.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(NF.15.AGV.Mean, NF.15.AGV.Min, NF.15.AGV.Max, "", "", "")))
+
+## Round Digits:
+NF.15.Stats$moistM<-as.numeric(NF.15.Stats$moistM)
+NF.15.Stats$AGVM<-as.numeric(NF.15.Stats$AGVM)
+NF.15.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+NF.15.Stats<-data.frame(append(NF.15.Stats, list(hybrid= ""), after =  1))
+NF.15.Stats<-data.frame(append(NF.15.Stats, list(seedtrt= ""), after =  2))
+NF.15.Stats<-data.frame(append(NF.15.Stats, list(pkg= ""), after =  3))
+NF.15.Stats<-data.frame(append(NF.15.Stats, list(herb= ""), after =  4))
+NF.15.Stats<-data.frame(append(NF.15.Stats, list(rank= ""), after =  6))
+NF.15.Stats<-data.frame(append(NF.15.Stats, list(percent= ""), after =  7))
+```
+
+## Central (2) Early (A)
+
+<!-- ### Field 11 -->
+
+<!-- ```{r CE1_Stats.Table, comment=NA, echo=FALSE, message=FALSE} -->
+<!-- ## Yield -->
+<!-- CE.21.Mean<-mean(CE.21$F1) -->
+<!-- CE.21.Min<-min(CE.21$F1) -->
+<!-- CE.21.Max<-max(CE.21$F1) -->
+<!-- CE.21.CV<-CV(CE.model1) -->
+<!-- CE.21.lsd<-predictmeans(CE.model1, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE) -->
+<!-- CE.21.LSD<-CE.21.lsd[["LSD"]][["Aveg.LSD"]] -->
+<!-- CE.21.MSE<-mean(residuals(CE.model1)^2) -->
+<!-- ## Moisture -->
+<!-- CE.21.Moist.Mean<-mean(CE.21$moist) -->
+<!-- CE.21.Moist.Min<-min(CE.21$moist) -->
+<!-- CE.21.Moist.Max<-max(CE.21$moist) -->
+<!-- CE.21.Moist.lsd<-predictmeans(CE.model.moist1, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE) -->
+<!-- CE.21.Moist.LSD<-CE.21.Moist.lsd[["LSD"]][["Aveg.LSD"]] -->
+<!-- ## Lodging -->
+<!-- CE.21.LDG.Mean<-mean(CE.21$tldg) -->
+<!-- CE.21.LDG.Min<-min(CE.21$tldg) -->
+<!-- CE.21.LDG.Max<-max(CE.21$tldg) -->
+<!-- ## AGV -->
+<!-- CE.21.AGV.Mean<-mean(CE.21$AGV) -->
+<!-- CE.21.AGV.Min<-min(CE.21$AGV) -->
+<!-- CE.21.AGV.Max<-max(CE.21$AGV) -->
+
+<!-- ## Summary Statistics Table: -->
+<!-- CE.21.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(CE.21.Mean, CE.21.Min, CE.21.Max, CE.21.LSD, CE.21.MSE, CE.21.CV)), "moistM" = as.numeric(c(CE.21.Moist.Mean, CE.21.Moist.Min, CE.21.Moist.Max, CE.21.Moist.LSD, "", "")), "TLDG" = as.numeric(c(CE.21.LDG.Mean, CE.21.LDG.Min, CE.21.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(CE.21.AGV.Mean, CE.21.AGV.Min, CE.21.AGV.Max, "", "", ""))) -->
+
+<!-- ## Round Digits: -->
+<!-- CE.21.Stats$moistM<-as.numeric(CE.21.Stats$moistM) -->
+<!-- CE.21.Stats$AGVM<-as.numeric(CE.21.Stats$AGVM) -->
+<!-- CE.21.Stats%>%mutate_if(is.numeric, round, digits=2) -->
+
+<!-- ## Add Blank Columns: -->
+<!-- CE.21.Stats<-data.frame(append(CE.21.Stats, list(hybrid= ""), after =  1)) -->
+<!-- CE.21.Stats<-data.frame(append(CE.21.Stats, list(seedtrt= ""), after =  2)) -->
+<!-- CE.21.Stats<-data.frame(append(CE.21.Stats, list(pkg= ""), after =  3)) -->
+<!-- CE.21.Stats<-data.frame(append(CE.21.Stats, list(herb= ""), after =  4)) -->
+<!-- CE.21.Stats<-data.frame(append(CE.21.Stats, list(rank= ""), after =  6)) -->
+<!-- CE.21.Stats<-data.frame(append(CE.21.Stats, list(percent= ""), after =  7)) -->
+<!-- ``` -->
+
+### Field 12
+
+```{r CE2_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+CE.22.Mean<-mean(CE.22$F2)
+CE.22.Min<-min(CE.22$F2)
+CE.22.Max<-max(CE.22$F2)
+CE.22.CV<-CV(CE.model2)
+CE.22.lsd<-predictmeans(CE.model2, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+CE.22.LSD<-CE.22.lsd[["LSD"]][["Aveg.LSD"]]
+CE.22.MSE<-mean(residuals(CE.model2)^2)
+## Moisture
+CE.22.Moist.Mean<-mean(CE.22$moist)
+CE.22.Moist.Min<-min(CE.22$moist)
+CE.22.Moist.Max<-max(CE.22$moist)
+CE.22.Moist.lsd<-predictmeans(CE.model.moist2, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+CE.22.Moist.LSD<-CE.22.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+CE.22.LDG.Mean<-mean(CE.22$tldg)
+CE.22.LDG.Min<-min(CE.22$tldg)
+CE.22.LDG.Max<-max(CE.22$tldg)
+## AGV
+CE.22.AGV.Mean<-mean(CE.22$AGV)
+CE.22.AGV.Min<-min(CE.22$AGV)
+CE.22.AGV.Max<-max(CE.22$AGV)
+
+## Summary Statistics Table:
+CE.22.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(CE.22.Mean, CE.22.Min, CE.22.Max, CE.22.LSD, CE.22.MSE, CE.22.CV)), "moistM" = as.numeric(c(CE.22.Moist.Mean, CE.22.Moist.Min, CE.22.Moist.Max, CE.22.Moist.LSD, "", "")), "TLDG" = as.numeric(c(CE.22.LDG.Mean, CE.22.LDG.Min, CE.22.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(CE.22.AGV.Mean, CE.22.AGV.Min, CE.22.AGV.Max, "", "", "")))
+
+## Round Digits:
+CE.22.Stats$moistM<-as.numeric(CE.22.Stats$moistM)
+CE.22.Stats$AGVM<-as.numeric(CE.22.Stats$AGVM)
+CE.22.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+CE.22.Stats<-data.frame(append(CE.22.Stats, list(hybrid= ""), after =  1))
+CE.22.Stats<-data.frame(append(CE.22.Stats, list(seedtrt= ""), after =  2))
+CE.22.Stats<-data.frame(append(CE.22.Stats, list(pkg= ""), after =  3))
+CE.22.Stats<-data.frame(append(CE.22.Stats, list(herb= ""), after =  4))
+CE.22.Stats<-data.frame(append(CE.22.Stats, list(rank= ""), after =  6))
+CE.22.Stats<-data.frame(append(CE.22.Stats, list(percent= ""), after =  7))
+```
+
+### Field 13
+
+```{r CE3_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+CE.23.Mean<-mean(CE.23$.F3)
+CE.23.Min<-min(CE.23$.F3)
+CE.23.Max<-max(CE.23$.F3)
+CE.23.CV<-CV(CE.model3)
+CE.23.lsd<-predictmeans(CE.model3, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+CE.23.LSD<-CE.23.lsd[["LSD"]][["Aveg.LSD"]]
+CE.23.MSE<-mean(residuals(CE.model3)^2)
+## Moisture
+CE.23.Moist.Mean<-mean(CE.23$moist)
+CE.23.Moist.Min<-min(CE.23$moist)
+CE.23.Moist.Max<-max(CE.23$moist)
+CE.23.Moist.lsd<-predictmeans(CE.model.moist3, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+CE.23.Moist.LSD<-CE.23.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+CE.23.LDG.Mean<-mean(CE.23$tldg)
+CE.23.LDG.Min<-min(CE.23$tldg)
+CE.23.LDG.Max<-max(CE.23$tldg)
+## AGV
+CE.23.AGV.Mean<-mean(CE.23$AGV)
+CE.23.AGV.Min<-min(CE.23$AGV)
+CE.23.AGV.Max<-max(CE.23$AGV)
+
+## Summary Statistics Table:
+CE.23.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(CE.23.Mean, CE.23.Min, CE.23.Max, CE.23.LSD, CE.23.MSE, CE.23.CV)), "moistM" = as.numeric(c(CE.23.Moist.Mean, CE.23.Moist.Min, CE.23.Moist.Max, CE.23.Moist.LSD, "", "")), "TLDG" = as.numeric(c(CE.23.LDG.Mean, CE.23.LDG.Min, CE.23.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(CE.23.AGV.Mean, CE.23.AGV.Min, CE.23.AGV.Max, "", "", "")))
+
+## Round Digits:
+CE.23.Stats$moistM<-as.numeric(CE.23.Stats$moistM)
+CE.23.Stats$AGVM<-as.numeric(CE.23.Stats$AGVM)
+CE.23.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+CE.23.Stats<-data.frame(append(CE.23.Stats, list(hybrid= ""), after =  1))
+CE.23.Stats<-data.frame(append(CE.23.Stats, list(seedtrt= ""), after =  2))
+CE.23.Stats<-data.frame(append(CE.23.Stats, list(pkg= ""), after =  3))
+CE.23.Stats<-data.frame(append(CE.23.Stats, list(herb= ""), after =  4))
+CE.23.Stats<-data.frame(append(CE.23.Stats, list(rank= ""), after =  6))
+CE.23.Stats<-data.frame(append(CE.23.Stats, list(percent= ""), after =  7))
+```
+
+### Field 14
+
+```{r CE4_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+CE.24.Mean<-mean(CE.24$.F4)
+CE.24.Min<-min(CE.24$.F4)
+CE.24.Max<-max(CE.24$.F4)
+CE.24.CV<-CV(CE.model4)
+CE.24.lsd<-predictmeans(CE.model4, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+CE.24.LSD<-CE.24.lsd[["LSD"]][["Aveg.LSD"]]
+CE.24.MSE<-mean(residuals(CE.model4)^2)
+## Moisture
+CE.24.Moist.Mean<-mean(CE.24$moist)
+CE.24.Moist.Min<-min(CE.24$moist)
+CE.24.Moist.Max<-max(CE.24$moist)
+CE.24.Moist.lsd<-predictmeans(CE.model.moist4, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+CE.24.Moist.LSD<-CE.24.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+CE.24.LDG.Mean<-mean(CE.24$tldg)
+CE.24.LDG.Min<-min(CE.24$tldg)
+CE.24.LDG.Max<-max(CE.24$tldg)
+## AGV
+CE.24.AGV.Mean<-mean(CE.24$AGV)
+CE.24.AGV.Min<-min(CE.24$AGV)
+CE.24.AGV.Max<-max(CE.24$AGV)
+
+## Summary Statistics Table:
+CE.24.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(CE.24.Mean, CE.24.Min, CE.24.Max, CE.24.LSD, CE.24.MSE, CE.24.CV)), "moistM" = as.numeric(c(CE.24.Moist.Mean, CE.24.Moist.Min, CE.24.Moist.Max, CE.24.Moist.LSD, "", "")), "TLDG" = as.numeric(c(CE.24.LDG.Mean, CE.24.LDG.Min, CE.24.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(CE.24.AGV.Mean, CE.24.AGV.Min, CE.24.AGV.Max, "", "", "")))
+
+## Round Digits:
+CE.24.Stats$moistM<-as.numeric(CE.24.Stats$moistM)
+CE.24.Stats$AGVM<-as.numeric(CE.24.Stats$AGVM)
+CE.24.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+CE.24.Stats<-data.frame(append(CE.24.Stats, list(hybrid= ""), after =  1))
+CE.24.Stats<-data.frame(append(CE.24.Stats, list(seedtrt= ""), after =  2))
+CE.24.Stats<-data.frame(append(CE.24.Stats, list(pkg= ""), after =  3))
+CE.24.Stats<-data.frame(append(CE.24.Stats, list(herb= ""), after =  4))
+CE.24.Stats<-data.frame(append(CE.24.Stats, list(rank= ""), after =  6))
+CE.24.Stats<-data.frame(append(CE.24.Stats, list(percent= ""), after =  7))
+```
+
+### Field 15
+
+```{r CE4_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+CE.25.Mean<-mean(CE.25$.F5)
+CE.25.Min<-min(CE.25$.F5)
+CE.25.Max<-max(CE.25$.F5)
+CE.25.CV<-CV(CE.model5)
+CE.25.lsd<-predictmeans(CE.model5, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+CE.25.LSD<-CE.25.lsd[["LSD"]][["Aveg.LSD"]]
+CE.25.MSE<-mean(residuals(CE.model5)^2)
+## Moisture
+CE.25.Moist.Mean<-mean(CE.25$moist)
+CE.25.Moist.Min<-min(CE.25$moist)
+CE.25.Moist.Max<-max(CE.25$moist)
+CE.25.Moist.lsd<-predictmeans(CE.model.moist5, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+CE.25.Moist.LSD<-CE.25.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+CE.25.LDG.Mean<-mean(CE.25$tldg)
+CE.25.LDG.Min<-min(CE.25$tldg)
+CE.25.LDG.Max<-max(CE.25$tldg)
+## AGV
+CE.25.AGV.Mean<-mean(CE.25$AGV)
+CE.25.AGV.Min<-min(CE.25$AGV)
+CE.25.AGV.Max<-max(CE.25$AGV)
+
+## Summary Statistics Table:
+CE.25.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(CE.25.Mean, CE.25.Min, CE.25.Max, CE.25.LSD, CE.25.MSE, CE.25.CV)), "moistM" = as.numeric(c(CE.25.Moist.Mean, CE.25.Moist.Min, CE.25.Moist.Max, CE.25.Moist.LSD, "", "")), "TLDG" = as.numeric(c(CE.25.LDG.Mean, CE.25.LDG.Min, CE.25.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(CE.25.AGV.Mean, CE.25.AGV.Min, CE.25.AGV.Max, "", "", "")))
+
+## Round Digits:
+CE.25.Stats$moistM<-as.numeric(CE.25.Stats$moistM)
+CE.25.Stats$AGVM<-as.numeric(CE.25.Stats$AGVM)
+CE.25.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+CE.25.Stats<-data.frame(append(CE.25.Stats, list(hybrid= ""), after =  1))
+CE.25.Stats<-data.frame(append(CE.25.Stats, list(seedtrt= ""), after =  2))
+CE.25.Stats<-data.frame(append(CE.25.Stats, list(pkg= ""), after =  3))
+CE.25.Stats<-data.frame(append(CE.25.Stats, list(herb= ""), after =  4))
+CE.25.Stats<-data.frame(append(CE.25.Stats, list(rank= ""), after =  6))
+CE.25.Stats<-data.frame(append(CE.25.Stats, list(percent= ""), after =  7))
+```
+
+## Central (2) Full (B)
+
+<!-- ### Field 11 -->
+
+<!-- ```{r NF1_Stats.Table, comment=NA, echo=FALSE, message=FALSE} -->
+<!-- ## Yield -->
+<!-- NF.21.Mean<-mean(NF.21$F1) -->
+<!-- NF.21.Min<-min(NF.21$F1) -->
+<!-- NF.21.Max<-max(NF.21$F1) -->
+<!-- NF.21.CV<-CV(NF.model1) -->
+<!-- NF.21.lsd<-predictmeans(NF.model1, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE) -->
+<!-- NF.21.LSD<-NF.21.lsd[["LSD"]][["Aveg.LSD"]] -->
+<!-- NF.21.MSE<-mean(residuals(NF.model1)^2) -->
+<!-- ## Moisture -->
+<!-- NF.21.Moist.Mean<-mean(NF.21$moist) -->
+<!-- NF.21.Moist.Min<-min(NF.21$moist) -->
+<!-- NF.21.Moist.Max<-max(NF.21$moist) -->
+<!-- NF.21.Moist.lsd<-predictmeans(NF.model.moist1, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE) -->
+<!-- NF.21.Moist.LSD<-NF.21.Moist.lsd[["LSD"]][["Aveg.LSD"]] -->
+<!-- ## Lodging -->
+<!-- NF.21.LDG.Mean<-mean(NF.21$tldg) -->
+<!-- NF.21.LDG.Min<-min(NF.21$tldg) -->
+<!-- NF.21.LDG.Max<-max(NF.21$tldg) -->
+<!-- ## AGV -->
+<!-- NF.21.AGV.Mean<-mean(NF.21$AGV) -->
+<!-- NF.21.AGV.Min<-min(NF.21$AGV) -->
+<!-- NF.21.AGV.Max<-max(NF.21$AGV) -->
+
+<!-- ## Summary Statistics Table: -->
+<!-- NF.21.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(NF.21.Mean, NF.21.Min, NF.21.Max, NF.21.LSD, NF.21.MSE, NF.21.CV)), "moistM" = as.numeric(c(NF.21.Moist.Mean, NF.21.Moist.Min, NF.21.Moist.Max, NF.21.Moist.LSD, "", "")), "TLDG" = as.numeric(c(NF.21.LDG.Mean, NF.21.LDG.Min, NF.21.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(NF.21.AGV.Mean, NF.21.AGV.Min, NF.21.AGV.Max, "", "", ""))) -->
+
+<!-- ## Round Digits: -->
+<!-- NF.21.Stats$moistM<-as.numeric(NF.21.Stats$moistM) -->
+<!-- NF.21.Stats$AGVM<-as.numeric(NF.21.Stats$AGVM) -->
+<!-- NF.21.Stats%>%mutate_if(is.numeric, round, digits=2) -->
+
+<!-- ## Add Blank Columns: -->
+<!-- NF.21.Stats<-data.frame(append(NF.21.Stats, list(hybrid= ""), after =  1)) -->
+<!-- NF.21.Stats<-data.frame(append(NF.21.Stats, list(seedtrt= ""), after =  2)) -->
+<!-- NF.21.Stats<-data.frame(append(NF.21.Stats, list(pkg= ""), after =  3)) -->
+<!-- NF.21.Stats<-data.frame(append(NF.21.Stats, list(herb= ""), after =  4)) -->
+<!-- NF.21.Stats<-data.frame(append(NF.21.Stats, list(rank= ""), after =  6)) -->
+<!-- NF.21.Stats<-data.frame(append(NF.21.Stats, list(percent= ""), after =  7)) -->
+<!-- ``` -->
+
+### Field 12
+
+```{r NF2_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+NF.22.Mean<-mean(NF.22$F2)
+NF.22.Min<-min(NF.22$F2)
+NF.22.Max<-max(NF.22$F2)
+NF.22.CV<-CV(NF.model2)
+NF.22.lsd<-predictmeans(NF.model2, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NF.22.LSD<-NF.22.lsd[["LSD"]][["Aveg.LSD"]]
+NF.22.MSE<-mean(residuals(NF.model2)^2)
+## Moisture
+NF.22.Moist.Mean<-mean(NF.22$moist)
+NF.22.Moist.Min<-min(NF.22$moist)
+NF.22.Moist.Max<-max(NF.22$moist)
+NF.22.Moist.lsd<-predictmeans(NF.model.moist2, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NF.22.Moist.LSD<-NF.22.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+NF.22.LDG.Mean<-mean(NF.22$tldg)
+NF.22.LDG.Min<-min(NF.22$tldg)
+NF.22.LDG.Max<-max(NF.22$tldg)
+## AGV
+NF.22.AGV.Mean<-mean(NF.22$AGV)
+NF.22.AGV.Min<-min(NF.22$AGV)
+NF.22.AGV.Max<-max(NF.22$AGV)
+
+## Summary Statistics Table:
+NF.22.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(NF.22.Mean, NF.22.Min, NF.22.Max, NF.22.LSD, NF.22.MSE, NF.22.CV)), "moistM" = as.numeric(c(NF.22.Moist.Mean, NF.22.Moist.Min, NF.22.Moist.Max, NF.22.Moist.LSD, "", "")), "TLDG" = as.numeric(c(NF.22.LDG.Mean, NF.22.LDG.Min, NF.22.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(NF.22.AGV.Mean, NF.22.AGV.Min, NF.22.AGV.Max, "", "", "")))
+
+## Round Digits:
+NF.22.Stats$moistM<-as.numeric(NF.22.Stats$moistM)
+NF.22.Stats$AGVM<-as.numeric(NF.22.Stats$AGVM)
+NF.22.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+NF.22.Stats<-data.frame(append(NF.22.Stats, list(hybrid= ""), after =  1))
+NF.22.Stats<-data.frame(append(NF.22.Stats, list(seedtrt= ""), after =  2))
+NF.22.Stats<-data.frame(append(NF.22.Stats, list(pkg= ""), after =  3))
+NF.22.Stats<-data.frame(append(NF.22.Stats, list(herb= ""), after =  4))
+NF.22.Stats<-data.frame(append(NF.22.Stats, list(rank= ""), after =  6))
+NF.22.Stats<-data.frame(append(NF.22.Stats, list(percent= ""), after =  7))
+```
+
+### Field 13
+
+```{r NF3_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+NF.23.Mean<-mean(NF.23$.F3)
+NF.23.Min<-min(NF.23$.F3)
+NF.23.Max<-max(NF.23$.F3)
+NF.23.CV<-CV(NF.model3)
+NF.23.lsd<-predictmeans(NF.model3, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NF.23.LSD<-NF.23.lsd[["LSD"]][["Aveg.LSD"]]
+NF.23.MSE<-mean(residuals(NF.model3)^2)
+## Moisture
+NF.23.Moist.Mean<-mean(NF.23$moist)
+NF.23.Moist.Min<-min(NF.23$moist)
+NF.23.Moist.Max<-max(NF.23$moist)
+NF.23.Moist.lsd<-predictmeans(NF.model.moist3, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NF.23.Moist.LSD<-NF.23.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+NF.23.LDG.Mean<-mean(NF.23$tldg)
+NF.23.LDG.Min<-min(NF.23$tldg)
+NF.23.LDG.Max<-max(NF.23$tldg)
+## AGV
+NF.23.AGV.Mean<-mean(NF.23$AGV)
+NF.23.AGV.Min<-min(NF.23$AGV)
+NF.23.AGV.Max<-max(NF.23$AGV)
+
+## Summary Statistics Table:
+NF.23.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(NF.23.Mean, NF.23.Min, NF.23.Max, NF.23.LSD, NF.23.MSE, NF.23.CV)), "moistM" = as.numeric(c(NF.23.Moist.Mean, NF.23.Moist.Min, NF.23.Moist.Max, NF.23.Moist.LSD, "", "")), "TLDG" = as.numeric(c(NF.23.LDG.Mean, NF.23.LDG.Min, NF.23.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(NF.23.AGV.Mean, NF.23.AGV.Min, NF.23.AGV.Max, "", "", "")))
+
+## Round Digits:
+NF.23.Stats$moistM<-as.numeric(NF.23.Stats$moistM)
+NF.23.Stats$AGVM<-as.numeric(NF.23.Stats$AGVM)
+NF.23.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+NF.23.Stats<-data.frame(append(NF.23.Stats, list(hybrid= ""), after =  1))
+NF.23.Stats<-data.frame(append(NF.23.Stats, list(seedtrt= ""), after =  2))
+NF.23.Stats<-data.frame(append(NF.23.Stats, list(pkg= ""), after =  3))
+NF.23.Stats<-data.frame(append(NF.23.Stats, list(herb= ""), after =  4))
+NF.23.Stats<-data.frame(append(NF.23.Stats, list(rank= ""), after =  6))
+NF.23.Stats<-data.frame(append(NF.23.Stats, list(percent= ""), after =  7))
+```
+
+### Field 14
+
+
+```{r CF4_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+CF.24.Mean<-mean(CF.24$.F4)
+CF.24.Min<-min(CF.24$.F4)
+CF.24.Max<-max(CF.24$.F4)
+CF.24.CV<-CV(CF.model4)
+CF.24.lsd<-predictmeans(CF.model4, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+CF.24.LSD<-CF.24.lsd[["LSD"]][["Aveg.LSD"]]
+CF.24.MSE<-mean(residuals(CF.model4)^2)
+## Moisture
+CF.24.Moist.Mean<-mean(CF.24$moist)
+CF.24.Moist.Min<-min(CF.24$moist)
+CF.24.Moist.Max<-max(CF.24$moist)
+CF.24.Moist.lsd<-predictmeans(CF.model.moist4, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+CF.24.Moist.LSD<-CF.24.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+CF.24.LDG.Mean<-mean(CF.24$tldg)
+CF.24.LDG.Min<-min(CF.24$tldg)
+CF.24.LDG.Max<-max(CF.24$tldg)
+## AGV
+CF.24.AGV.Mean<-mean(CF.24$AGV)
+CF.24.AGV.Min<-min(CF.24$AGV)
+CF.24.AGV.Max<-max(CF.24$AGV)
+
+## Summary Statistics Table:
+CF.24.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(CF.24.Mean, CF.24.Min, CF.24.Max, CF.24.LSD, CF.24.MSE, CF.24.CV)), "moistM" = as.numeric(c(CF.24.Moist.Mean, CF.24.Moist.Min, CF.24.Moist.Max, CF.24.Moist.LSD, "", "")), "TLDG" = as.numeric(c(CF.24.LDG.Mean, CF.24.LDG.Min, CF.24.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(CF.24.AGV.Mean, CF.24.AGV.Min, CF.24.AGV.Max, "", "", "")))
+
+## Round Digits:
+CF.24.Stats$moistM<-as.numeric(CF.24.Stats$moistM)
+CF.24.Stats$AGVM<-as.numeric(CF.24.Stats$AGVM)
+CF.24.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+CF.24.Stats<-data.frame(append(CF.24.Stats, list(hybrid= ""), after =  1))
+CF.24.Stats<-data.frame(append(CF.24.Stats, list(seedtrt= ""), after =  2))
+CF.24.Stats<-data.frame(append(CF.24.Stats, list(pkg= ""), after =  3))
+CF.24.Stats<-data.frame(append(CF.24.Stats, list(herb= ""), after =  4))
+CF.24.Stats<-data.frame(append(CF.24.Stats, list(rank= ""), after =  6))
+CF.24.Stats<-data.frame(append(CF.24.Stats, list(percent= ""), after =  7))
+```
+
+### Field 15
+
+```{r NF4_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+NF.25.Mean<-mean(NF.25$.F5)
+NF.25.Min<-min(NF.25$.F5)
+NF.25.Max<-max(NF.25$.F5)
+NF.25.CV<-CV(NF.model5)
+NF.25.lsd<-predictmeans(NF.model5, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NF.25.LSD<-NF.25.lsd[["LSD"]][["Aveg.LSD"]]
+NF.25.MSE<-mean(residuals(NF.model5)^2)
+## Moisture
+NF.25.Moist.Mean<-mean(NF.25$moist)
+NF.25.Moist.Min<-min(NF.25$moist)
+NF.25.Moist.Max<-max(NF.25$moist)
+NF.25.Moist.lsd<-predictmeans(NF.model.moist5, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+NF.25.Moist.LSD<-NF.25.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+NF.25.LDG.Mean<-mean(NF.25$tldg)
+NF.25.LDG.Min<-min(NF.25$tldg)
+NF.25.LDG.Max<-max(NF.25$tldg)
+## AGV
+NF.25.AGV.Mean<-mean(NF.25$AGV)
+NF.25.AGV.Min<-min(NF.25$AGV)
+NF.25.AGV.Max<-max(NF.25$AGV)
+
+## Summary Statistics Table:
+NF.25.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(NF.25.Mean, NF.25.Min, NF.25.Max, NF.25.LSD, NF.25.MSE, NF.25.CV)), "moistM" = as.numeric(c(NF.25.Moist.Mean, NF.25.Moist.Min, NF.25.Moist.Max, NF.25.Moist.LSD, "", "")), "TLDG" = as.numeric(c(NF.25.LDG.Mean, NF.25.LDG.Min, NF.25.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(NF.25.AGV.Mean, NF.25.AGV.Min, NF.25.AGV.Max, "", "", "")))
+
+## Round Digits:
+NF.25.Stats$moistM<-as.numeric(NF.25.Stats$moistM)
+NF.25.Stats$AGVM<-as.numeric(NF.25.Stats$AGVM)
+NF.25.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+NF.25.Stats<-data.frame(append(NF.25.Stats, list(hybrid= ""), after =  1))
+NF.25.Stats<-data.frame(append(NF.25.Stats, list(seedtrt= ""), after =  2))
+NF.25.Stats<-data.frame(append(NF.25.Stats, list(pkg= ""), after =  3))
+NF.25.Stats<-data.frame(append(NF.25.Stats, list(herb= ""), after =  4))
+NF.25.Stats<-data.frame(append(NF.25.Stats, list(rank= ""), after =  6))
+NF.25.Stats<-data.frame(append(NF.25.Stats, list(percent= ""), after =  7))
+```
+
+## South (1) Early (A)
+
+<!-- ### Field 11 -->
+
+<!-- ```{r SE1_Stats.Table, comment=NA, echo=FALSE, message=FALSE} -->
+<!-- ## Yield -->
+<!-- SE.31.Mean<-mean(SE.31$F1) -->
+<!-- SE.31.Min<-min(SE.31$F1) -->
+<!-- SE.31.Max<-max(SE.31$F1) -->
+<!-- SE.31.CV<-CV(SE.model1) -->
+<!-- SE.31.lsd<-predictmeans(SE.model1, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE) -->
+<!-- SE.31.LSD<-SE.31.lsd[["LSD"]][["Aveg.LSD"]] -->
+<!-- SE.31.MSE<-mean(residuals(SE.model1)^2) -->
+<!-- ## Moisture -->
+<!-- SE.31.Moist.Mean<-mean(SE.31$moist) -->
+<!-- SE.31.Moist.Min<-min(SE.31$moist) -->
+<!-- SE.31.Moist.Max<-max(SE.31$moist) -->
+<!-- SE.31.Moist.lsd<-predictmeans(SE.model.moist1, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE) -->
+<!-- SE.31.Moist.LSD<-SE.31.Moist.lsd[["LSD"]][["Aveg.LSD"]] -->
+<!-- ## Lodging -->
+<!-- SE.31.LDG.Mean<-mean(SE.31$tldg) -->
+<!-- SE.31.LDG.Min<-min(SE.31$tldg) -->
+<!-- SE.31.LDG.Max<-max(SE.31$tldg) -->
+<!-- ## AGV -->
+<!-- SE.31.AGV.Mean<-mean(SE.31$AGV) -->
+<!-- SE.31.AGV.Min<-min(SE.31$AGV) -->
+<!-- SE.31.AGV.Max<-max(SE.31$AGV) -->
+
+<!-- ## Summary Statistics Table: -->
+<!-- SE.31.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(SE.31.Mean, SE.31.Min, SE.31.Max, SE.31.LSD, SE.31.MSE, SE.31.CV)), "moistM" = as.numeric(c(SE.31.Moist.Mean, SE.31.Moist.Min, SE.31.Moist.Max, SE.31.Moist.LSD, "", "")), "TLDG" = as.numeric(c(SE.31.LDG.Mean, SE.31.LDG.Min, SE.31.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(SE.31.AGV.Mean, SE.31.AGV.Min, SE.31.AGV.Max, "", "", ""))) -->
+
+<!-- ## Round Digits: -->
+<!-- SE.31.Stats$moistM<-as.numeric(SE.31.Stats$moistM) -->
+<!-- SE.31.Stats$AGVM<-as.numeric(SE.31.Stats$AGVM) -->
+<!-- SE.31.Stats%>%mutate_if(is.numeric, round, digits=2) -->
+
+<!-- ## Add Blank Columns: -->
+<!-- SE.31.Stats<-data.frame(append(SE.31.Stats, list(hybrid= ""), after =  1)) -->
+<!-- SE.31.Stats<-data.frame(append(SE.31.Stats, list(seedtrt= ""), after =  2)) -->
+<!-- SE.31.Stats<-data.frame(append(SE.31.Stats, list(pkg= ""), after =  3)) -->
+<!-- SE.31.Stats<-data.frame(append(SE.31.Stats, list(herb= ""), after =  4)) -->
+<!-- SE.31.Stats<-data.frame(append(SE.31.Stats, list(rank= ""), after =  6)) -->
+<!-- SE.31.Stats<-data.frame(append(SE.31.Stats, list(percent= ""), after =  7)) -->
+<!-- ``` -->
+
+### Field 12
+
+```{r SE2_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+SE.32.Mean<-mean(SE.32$F2)
+SE.32.Min<-min(SE.32$F2)
+SE.32.Max<-max(SE.32$F2)
+SE.32.CV<-CV(SE.model2)
+SE.32.lsd<-predictmeans(SE.model2, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+SE.32.LSD<-SE.32.lsd[["LSD"]][["Aveg.LSD"]]
+SE.32.MSE<-mean(residuals(SE.model2)^2)
+## Moisture
+SE.32.Moist.Mean<-mean(SE.32$moist)
+SE.32.Moist.Min<-min(SE.32$moist)
+SE.32.Moist.Max<-max(SE.32$moist)
+SE.32.Moist.lsd<-predictmeans(SE.model.moist2, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+SE.32.Moist.LSD<-SE.32.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+SE.32.LDG.Mean<-mean(SE.32$tldg)
+SE.32.LDG.Min<-min(SE.32$tldg)
+SE.32.LDG.Max<-max(SE.32$tldg)
+## AGV
+SE.32.AGV.Mean<-mean(SE.32$AGV)
+SE.32.AGV.Min<-min(SE.32$AGV)
+SE.32.AGV.Max<-max(SE.32$AGV)
+
+## Summary Statistics Table:
+SE.32.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(SE.32.Mean, SE.32.Min, SE.32.Max, SE.32.LSD, SE.32.MSE, SE.32.CV)), "moistM" = as.numeric(c(SE.32.Moist.Mean, SE.32.Moist.Min, SE.32.Moist.Max, SE.32.Moist.LSD, "", "")), "TLDG" = as.numeric(c(SE.32.LDG.Mean, SE.32.LDG.Min, SE.32.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(SE.32.AGV.Mean, SE.32.AGV.Min, SE.32.AGV.Max, "", "", "")))
+
+## Round Digits:
+SE.32.Stats$moistM<-as.numeric(SE.32.Stats$moistM)
+SE.32.Stats$AGVM<-as.numeric(SE.32.Stats$AGVM)
+SE.32.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+SE.32.Stats<-data.frame(append(SE.32.Stats, list(hybrid= ""), after =  1))
+SE.32.Stats<-data.frame(append(SE.32.Stats, list(seedtrt= ""), after =  2))
+SE.32.Stats<-data.frame(append(SE.32.Stats, list(pkg= ""), after =  3))
+SE.32.Stats<-data.frame(append(SE.32.Stats, list(herb= ""), after =  4))
+SE.32.Stats<-data.frame(append(SE.32.Stats, list(rank= ""), after =  6))
+SE.32.Stats<-data.frame(append(SE.32.Stats, list(percent= ""), after =  7))
+```
+
+### Field 13
+
+```{r SE3_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+SE.33.Mean<-mean(SE.33$.F3)
+SE.33.Min<-min(SE.33$.F3)
+SE.33.Max<-max(SE.33$.F3)
+SE.33.CV<-CV(SE.model3)
+SE.33.lsd<-predictmeans(SE.model3, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+SE.33.LSD<-SE.33.lsd[["LSD"]][["Aveg.LSD"]]
+SE.33.MSE<-mean(residuals(SE.model3)^2)
+## Moisture
+SE.33.Moist.Mean<-mean(SE.33$moist)
+SE.33.Moist.Min<-min(SE.33$moist)
+SE.33.Moist.Max<-max(SE.33$moist)
+SE.33.Moist.lsd<-predictmeans(SE.model.moist3, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+SE.33.Moist.LSD<-SE.33.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+SE.33.LDG.Mean<-mean(SE.33$tldg)
+SE.33.LDG.Min<-min(SE.33$tldg)
+SE.33.LDG.Max<-max(SE.33$tldg)
+## AGV
+SE.33.AGV.Mean<-mean(SE.33$AGV)
+SE.33.AGV.Min<-min(SE.33$AGV)
+SE.33.AGV.Max<-max(SE.33$AGV)
+
+## Summary Statistics Table:
+SE.33.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(SE.33.Mean, SE.33.Min, SE.33.Max, SE.33.LSD, SE.33.MSE, SE.33.CV)), "moistM" = as.numeric(c(SE.33.Moist.Mean, SE.33.Moist.Min, SE.33.Moist.Max, SE.33.Moist.LSD, "", "")), "TLDG" = as.numeric(c(SE.33.LDG.Mean, SE.33.LDG.Min, SE.33.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(SE.33.AGV.Mean, SE.33.AGV.Min, SE.33.AGV.Max, "", "", "")))
+
+## Round Digits:
+SE.33.Stats$moistM<-as.numeric(SE.33.Stats$moistM)
+SE.33.Stats$AGVM<-as.numeric(SE.33.Stats$AGVM)
+SE.33.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+SE.33.Stats<-data.frame(append(SE.33.Stats, list(hybrid= ""), after =  1))
+SE.33.Stats<-data.frame(append(SE.33.Stats, list(seedtrt= ""), after =  2))
+SE.33.Stats<-data.frame(append(SE.33.Stats, list(pkg= ""), after =  3))
+SE.33.Stats<-data.frame(append(SE.33.Stats, list(herb= ""), after =  4))
+SE.33.Stats<-data.frame(append(SE.33.Stats, list(rank= ""), after =  6))
+SE.33.Stats<-data.frame(append(SE.33.Stats, list(percent= ""), after =  7))
+```
+
+### Field 14
+
+```{r SE4_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+SE.34.Mean<-mean(SE.34$.F4)
+SE.34.Min<-min(SE.34$.F4)
+SE.34.Max<-max(SE.34$.F4)
+SE.34.CV<-CV(SE.model4)
+SE.34.lsd<-predictmeans(SE.model4, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+SE.34.LSD<-SE.34.lsd[["LSD"]][["Aveg.LSD"]]
+SE.34.MSE<-mean(residuals(SE.model4)^2)
+## Moisture
+SE.34.Moist.Mean<-mean(SE.34$moist)
+SE.34.Moist.Min<-min(SE.34$moist)
+SE.34.Moist.Max<-max(SE.34$moist)
+SE.34.Moist.lsd<-predictmeans(SE.model.moist4, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+SE.34.Moist.LSD<-SE.34.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+SE.34.LDG.Mean<-mean(SE.34$tldg)
+SE.34.LDG.Min<-min(SE.34$tldg)
+SE.34.LDG.Max<-max(SE.34$tldg)
+## AGV
+SE.34.AGV.Mean<-mean(SE.34$AGV)
+SE.34.AGV.Min<-min(SE.34$AGV)
+SE.34.AGV.Max<-max(SE.34$AGV)
+
+## Summary Statistics Table:
+SE.34.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(SE.34.Mean, SE.34.Min, SE.34.Max, SE.34.LSD, SE.34.MSE, SE.34.CV)), "moistM" = as.numeric(c(SE.34.Moist.Mean, SE.34.Moist.Min, SE.34.Moist.Max, SE.34.Moist.LSD, "", "")), "TLDG" = as.numeric(c(SE.34.LDG.Mean, SE.34.LDG.Min, SE.34.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(SE.34.AGV.Mean, SE.34.AGV.Min, SE.34.AGV.Max, "", "", "")))
+
+## Round Digits:
+SE.34.Stats$moistM<-as.numeric(SE.34.Stats$moistM)
+SE.34.Stats$AGVM<-as.numeric(SE.34.Stats$AGVM)
+SE.34.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+SE.34.Stats<-data.frame(append(SE.34.Stats, list(hybrid= ""), after =  1))
+SE.34.Stats<-data.frame(append(SE.34.Stats, list(seedtrt= ""), after =  2))
+SE.34.Stats<-data.frame(append(SE.34.Stats, list(pkg= ""), after =  3))
+SE.34.Stats<-data.frame(append(SE.34.Stats, list(herb= ""), after =  4))
+SE.34.Stats<-data.frame(append(SE.34.Stats, list(rank= ""), after =  6))
+SE.34.Stats<-data.frame(append(SE.34.Stats, list(percent= ""), after =  7))
+```
+
+### Field 15
+
+```{r SE4_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+SE.35.Mean<-mean(SE.35$.F5)
+SE.35.Min<-min(SE.35$.F5)
+SE.35.Max<-max(SE.35$.F5)
+SE.35.CV<-CV(SE.model5)
+SE.35.lsd<-predictmeans(SE.model5, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+SE.35.LSD<-SE.35.lsd[["LSD"]][["Aveg.LSD"]]
+SE.35.MSE<-mean(residuals(SE.model5)^2)
+## Moisture
+SE.35.Moist.Mean<-mean(SE.35$moist)
+SE.35.Moist.Min<-min(SE.35$moist)
+SE.35.Moist.Max<-max(SE.35$moist)
+SE.35.Moist.lsd<-predictmeans(SE.model.moist5, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+SE.35.Moist.LSD<-SE.35.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+SE.35.LDG.Mean<-mean(SE.35$tldg)
+SE.35.LDG.Min<-min(SE.35$tldg)
+SE.35.LDG.Max<-max(SE.35$tldg)
+## AGV
+SE.35.AGV.Mean<-mean(SE.35$AGV)
+SE.35.AGV.Min<-min(SE.35$AGV)
+SE.35.AGV.Max<-max(SE.35$AGV)
+
+## Summary Statistics Table:
+SE.35.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(SE.35.Mean, SE.35.Min, SE.35.Max, SE.35.LSD, SE.35.MSE, SE.35.CV)), "moistM" = as.numeric(c(SE.35.Moist.Mean, SE.35.Moist.Min, SE.35.Moist.Max, SE.35.Moist.LSD, "", "")), "TLDG" = as.numeric(c(SE.35.LDG.Mean, SE.35.LDG.Min, SE.35.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(SE.35.AGV.Mean, SE.35.AGV.Min, SE.35.AGV.Max, "", "", "")))
+
+## Round Digits:
+SE.35.Stats$moistM<-as.numeric(SE.35.Stats$moistM)
+SE.35.Stats$AGVM<-as.numeric(SE.35.Stats$AGVM)
+SE.35.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+SE.35.Stats<-data.frame(append(SE.35.Stats, list(hybrid= ""), after =  1))
+SE.35.Stats<-data.frame(append(SE.35.Stats, list(seedtrt= ""), after =  2))
+SE.35.Stats<-data.frame(append(SE.35.Stats, list(pkg= ""), after =  3))
+SE.35.Stats<-data.frame(append(SE.35.Stats, list(herb= ""), after =  4))
+SE.35.Stats<-data.frame(append(SE.35.Stats, list(rank= ""), after =  6))
+SE.35.Stats<-data.frame(append(SE.35.Stats, list(percent= ""), after =  7))
+```
+
+## South (1) Full (B)
+
+<!-- ### Field 11 -->
+
+<!-- ```{r SF1_Stats.Table, comment=NA, echo=FALSE, message=FALSE} -->
+<!-- ## Yield -->
+<!-- SF.31.Mean<-mean(SF.31$F1) -->
+<!-- SF.31.Min<-min(SF.31$F1) -->
+<!-- SF.31.Max<-max(SF.31$F1) -->
+<!-- SF.31.CV<-CV(SF.model1) -->
+<!-- SF.31.lsd<-predictmeans(SF.model1, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE) -->
+<!-- SF.31.LSD<-SF.31.lsd[["LSD"]][["Aveg.LSD"]] -->
+<!-- SF.31.MSE<-mean(residuals(SF.model1)^2) -->
+<!-- ## Moisture -->
+<!-- SF.31.Moist.Mean<-mean(SF.31$moist) -->
+<!-- SF.31.Moist.Min<-min(SF.31$moist) -->
+<!-- SF.31.Moist.Max<-max(SF.31$moist) -->
+<!-- SF.31.Moist.lsd<-predictmeans(SF.model.moist1, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE) -->
+<!-- SF.31.Moist.LSD<-SF.31.Moist.lsd[["LSD"]][["Aveg.LSD"]] -->
+<!-- ## Lodging -->
+<!-- SF.31.LDG.Mean<-mean(SF.31$tldg) -->
+<!-- SF.31.LDG.Min<-min(SF.31$tldg) -->
+<!-- SF.31.LDG.Max<-max(SF.31$tldg) -->
+<!-- ## AGV -->
+<!-- SF.31.AGV.Mean<-mean(SF.31$AGV) -->
+<!-- SF.31.AGV.Min<-min(SF.31$AGV) -->
+<!-- SF.31.AGV.Max<-max(SF.31$AGV) -->
+
+<!-- ## Summary Statistics Table: -->
+<!-- SF.31.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(SF.31.Mean, SF.31.Min, SF.31.Max, SF.31.LSD, SF.31.MSE, SF.31.CV)), "moistM" = as.numeric(c(SF.31.Moist.Mean, SF.31.Moist.Min, SF.31.Moist.Max, SF.31.Moist.LSD, "", "")), "TLDG" = as.numeric(c(SF.31.LDG.Mean, SF.31.LDG.Min, SF.31.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(SF.31.AGV.Mean, SF.31.AGV.Min, SF.31.AGV.Max, "", "", ""))) -->
+
+<!-- ## Round Digits: -->
+<!-- SF.31.Stats$moistM<-as.numeric(SF.31.Stats$moistM) -->
+<!-- SF.31.Stats$AGVM<-as.numeric(SF.31.Stats$AGVM) -->
+<!-- SF.31.Stats%>%mutate_if(is.numeric, round, digits=2) -->
+
+<!-- ## Add Blank Columns: -->
+<!-- SF.31.Stats<-data.frame(append(SF.31.Stats, list(hybrid= ""), after =  1)) -->
+<!-- SF.31.Stats<-data.frame(append(SF.31.Stats, list(seedtrt= ""), after =  2)) -->
+<!-- SF.31.Stats<-data.frame(append(SF.31.Stats, list(pkg= ""), after =  3)) -->
+<!-- SF.31.Stats<-data.frame(append(SF.31.Stats, list(herb= ""), after =  4)) -->
+<!-- SF.31.Stats<-data.frame(append(SF.31.Stats, list(rank= ""), after =  6)) -->
+<!-- SF.31.Stats<-data.frame(append(SF.31.Stats, list(percent= ""), after =  7)) -->
+<!-- ``` -->
+
+### Field 12
+
+```{r SF2_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+SF.32.Mean<-mean(SF.32$F2)
+SF.32.Min<-min(SF.32$F2)
+SF.32.Max<-max(SF.32$F2)
+SF.32.CV<-CV(SF.model2)
+SF.32.lsd<-predictmeans(SF.model2, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+SF.32.LSD<-SF.32.lsd[["LSD"]][["Aveg.LSD"]]
+SF.32.MSE<-mean(residuals(SF.model2)^2)
+## Moisture
+SF.32.Moist.Mean<-mean(SF.32$moist)
+SF.32.Moist.Min<-min(SF.32$moist)
+SF.32.Moist.Max<-max(SF.32$moist)
+SF.32.Moist.lsd<-predictmeans(SF.model.moist2, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+SF.32.Moist.LSD<-SF.32.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+SF.32.LDG.Mean<-mean(SF.32$tldg)
+SF.32.LDG.Min<-min(SF.32$tldg)
+SF.32.LDG.Max<-max(SF.32$tldg)
+## AGV
+SF.32.AGV.Mean<-mean(SF.32$AGV)
+SF.32.AGV.Min<-min(SF.32$AGV)
+SF.32.AGV.Max<-max(SF.32$AGV)
+
+## Summary Statistics Table:
+SF.32.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(SF.32.Mean, SF.32.Min, SF.32.Max, SF.32.LSD, SF.32.MSE, SF.32.CV)), "moistM" = as.numeric(c(SF.32.Moist.Mean, SF.32.Moist.Min, SF.32.Moist.Max, SF.32.Moist.LSD, "", "")), "TLDG" = as.numeric(c(SF.32.LDG.Mean, SF.32.LDG.Min, SF.32.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(SF.32.AGV.Mean, SF.32.AGV.Min, SF.32.AGV.Max, "", "", "")))
+
+## Round Digits:
+SF.32.Stats$moistM<-as.numeric(SF.32.Stats$moistM)
+SF.32.Stats$AGVM<-as.numeric(SF.32.Stats$AGVM)
+SF.32.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+SF.32.Stats<-data.frame(append(SF.32.Stats, list(hybrid= ""), after =  1))
+SF.32.Stats<-data.frame(append(SF.32.Stats, list(seedtrt= ""), after =  2))
+SF.32.Stats<-data.frame(append(SF.32.Stats, list(pkg= ""), after =  3))
+SF.32.Stats<-data.frame(append(SF.32.Stats, list(herb= ""), after =  4))
+SF.32.Stats<-data.frame(append(SF.32.Stats, list(rank= ""), after =  6))
+SF.32.Stats<-data.frame(append(SF.32.Stats, list(percent= ""), after =  7))
+```
+
+### Field 13
+
+```{r SF3_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+SF.33.Mean<-mean(SF.33$.F3)
+SF.33.Min<-min(SF.33$.F3)
+SF.33.Max<-max(SF.33$.F3)
+SF.33.CV<-CV(SF.model3)
+SF.33.lsd<-predictmeans(SF.model3, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+SF.33.LSD<-SF.33.lsd[["LSD"]][["Aveg.LSD"]]
+SF.33.MSE<-mean(residuals(SF.model3)^2)
+## Moisture
+SF.33.Moist.Mean<-mean(SF.33$moist)
+SF.33.Moist.Min<-min(SF.33$moist)
+SF.33.Moist.Max<-max(SF.33$moist)
+SF.33.Moist.lsd<-predictmeans(SF.model.moist3, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+SF.33.Moist.LSD<-SF.33.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+SF.33.LDG.Mean<-mean(SF.33$tldg)
+SF.33.LDG.Min<-min(SF.33$tldg)
+SF.33.LDG.Max<-max(SF.33$tldg)
+## AGV
+SF.33.AGV.Mean<-mean(SF.33$AGV)
+SF.33.AGV.Min<-min(SF.33$AGV)
+SF.33.AGV.Max<-max(SF.33$AGV)
+
+## Summary Statistics Table:
+SF.33.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(SF.33.Mean, SF.33.Min, SF.33.Max, SF.33.LSD, SF.33.MSE, SF.33.CV)), "moistM" = as.numeric(c(SF.33.Moist.Mean, SF.33.Moist.Min, SF.33.Moist.Max, SF.33.Moist.LSD, "", "")), "TLDG" = as.numeric(c(SF.33.LDG.Mean, SF.33.LDG.Min, SF.33.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(SF.33.AGV.Mean, SF.33.AGV.Min, SF.33.AGV.Max, "", "", "")))
+
+## Round Digits:
+SF.33.Stats$moistM<-as.numeric(SF.33.Stats$moistM)
+SF.33.Stats$AGVM<-as.numeric(SF.33.Stats$AGVM)
+SF.33.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+SF.33.Stats<-data.frame(append(SF.33.Stats, list(hybrid= ""), after =  1))
+SF.33.Stats<-data.frame(append(SF.33.Stats, list(seedtrt= ""), after =  2))
+SF.33.Stats<-data.frame(append(SF.33.Stats, list(pkg= ""), after =  3))
+SF.33.Stats<-data.frame(append(SF.33.Stats, list(herb= ""), after =  4))
+SF.33.Stats<-data.frame(append(SF.33.Stats, list(rank= ""), after =  6))
+SF.33.Stats<-data.frame(append(SF.33.Stats, list(percent= ""), after =  7))
+```
+
+### Field 14
+
+```{r SF4_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+SF.34.Mean<-mean(SF.34$.F4)
+SF.34.Min<-min(SF.34$.F4)
+SF.34.Max<-max(SF.34$.F4)
+SF.34.CV<-CV(SF.model4)
+SF.34.lsd<-predictmeans(SF.model4, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+SF.34.LSD<-SF.34.lsd[["LSD"]][["Aveg.LSD"]]
+SF.34.MSE<-mean(residuals(SF.model4)^2)
+## Moisture
+SF.34.Moist.Mean<-mean(SF.34$moist)
+SF.34.Moist.Min<-min(SF.34$moist)
+SF.34.Moist.Max<-max(SF.34$moist)
+SF.34.Moist.lsd<-predictmeans(SF.model.moist4, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+SF.34.Moist.LSD<-SF.34.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+SF.34.LDG.Mean<-mean(SF.34$tldg)
+SF.34.LDG.Min<-min(SF.34$tldg)
+SF.34.LDG.Max<-max(SF.34$tldg)
+## AGV
+SF.34.AGV.Mean<-mean(SF.34$AGV)
+SF.34.AGV.Min<-min(SF.34$AGV)
+SF.34.AGV.Max<-max(SF.34$AGV)
+
+## Summary Statistics Table:
+SF.34.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(SF.34.Mean, SF.34.Min, SF.34.Max, SF.34.LSD, SF.34.MSE, SF.34.CV)), "moistM" = as.numeric(c(SF.34.Moist.Mean, SF.34.Moist.Min, SF.34.Moist.Max, SF.34.Moist.LSD, "", "")), "TLDG" = as.numeric(c(SF.34.LDG.Mean, SF.34.LDG.Min, SF.34.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(SF.34.AGV.Mean, SF.34.AGV.Min, SF.34.AGV.Max, "", "", "")))
+
+## Round Digits:
+SF.34.Stats$moistM<-as.numeric(SF.34.Stats$moistM)
+SF.34.Stats$AGVM<-as.numeric(SF.34.Stats$AGVM)
+SF.34.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+SF.34.Stats<-data.frame(append(SF.34.Stats, list(hybrid= ""), after =  1))
+SF.34.Stats<-data.frame(append(SF.34.Stats, list(seedtrt= ""), after =  2))
+SF.34.Stats<-data.frame(append(SF.34.Stats, list(pkg= ""), after =  3))
+SF.34.Stats<-data.frame(append(SF.34.Stats, list(herb= ""), after =  4))
+SF.34.Stats<-data.frame(append(SF.34.Stats, list(rank= ""), after =  6))
+SF.34.Stats<-data.frame(append(SF.34.Stats, list(percent= ""), after =  7))
+```
+
+### Field 15
+
+```{r SF4_Stats.Table, comment=NA, echo=FALSE, message=FALSE}
+## Yield
+SF.35.Mean<-mean(SF.35$.F5)
+SF.35.Min<-min(SF.35$.F5)
+SF.35.Max<-max(SF.35$.F5)
+SF.35.CV<-CV(SF.model5)
+SF.35.lsd<-predictmeans(SF.model5, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+SF.35.LSD<-SF.35.lsd[["LSD"]][["Aveg.LSD"]]
+SF.35.MSE<-mean(residuals(SF.model5)^2)
+## Moisture
+SF.35.Moist.Mean<-mean(SF.35$moist)
+SF.35.Moist.Min<-min(SF.35$moist)
+SF.35.Moist.Max<-max(SF.35$moist)
+SF.35.Moist.lsd<-predictmeans(SF.model.moist5, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+SF.35.Moist.LSD<-SF.35.Moist.lsd[["LSD"]][["Aveg.LSD"]]
+## Lodging
+SF.35.LDG.Mean<-mean(SF.35$tldg)
+SF.35.LDG.Min<-min(SF.35$tldg)
+SF.35.LDG.Max<-max(SF.35$tldg)
+## AGV
+SF.35.AGV.Mean<-mean(SF.35$AGV)
+SF.35.AGV.Min<-min(SF.35$AGV)
+SF.35.AGV.Max<-max(SF.35$AGV)
+
+## Summary Statistics Table:
+SF.35.Stats<- data.frame("Value" = c("Experiment Mean",	"Minimum Mean",	"Maximum Mean",	"LSD(0.25)", "Effective Error MS", "Coefficient of Variability") ,"yldM" = as.numeric(c(SF.35.Mean, SF.35.Min, SF.35.Max, SF.35.LSD, SF.35.MSE, SF.35.CV)), "moistM" = as.numeric(c(SF.35.Moist.Mean, SF.35.Moist.Min, SF.35.Moist.Max, SF.35.Moist.LSD, "", "")), "TLDG" = as.numeric(c(SF.35.LDG.Mean, SF.35.LDG.Min, SF.35.LDG.Max, "", "", "")), "AGVM" = as.numeric(c(SF.35.AGV.Mean, SF.35.AGV.Min, SF.35.AGV.Max, "", "", "")))
+
+## Round Digits:
+SF.35.Stats$moistM<-as.numeric(SF.35.Stats$moistM)
+SF.35.Stats$AGVM<-as.numeric(SF.35.Stats$AGVM)
+SF.35.Stats%>%mutate_if(is.numeric, round, digits=2)
+
+## Add Blank Columns:
+SF.35.Stats<-data.frame(append(SF.35.Stats, list(hybrid= ""), after =  1))
+SF.35.Stats<-data.frame(append(SF.35.Stats, list(seedtrt= ""), after =  2))
+SF.35.Stats<-data.frame(append(SF.35.Stats, list(pkg= ""), after =  3))
+SF.35.Stats<-data.frame(append(SF.35.Stats, list(herb= ""), after =  4))
+SF.35.Stats<-data.frame(append(SF.35.Stats, list(rank= ""), after =  6))
+SF.35.Stats<-data.frame(append(SF.35.Stats, list(percent= ""), after =  7))
+```
+
+
+# Export
+
+```{r Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+## Export to pre-formatted Excel table:
+wb<-loadWorkbook("SingleLocCorn18.xlsx", create=FALSE)
+setStyleAction(wb,XLC$"STYLE_ACTION.NONE")
+```
+
+**Write single location to designated Excel worksheet:**
+
+## North (1) Early (A)
+
+### Field 11
+
+```{r NE1.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, NE.11, "F11NC1", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, NE.11.Stats, "F11NC1", startRow=54, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+### Field 12
+
+```{r NE2.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, NE.12, "F12NC1", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, NE.12.Stats, "F12NC1", startRow=54, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+<!-- ### Field 13 -->
+
+<!-- ```{r NE3.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE} -->
+<!-- writeWorksheet(wb, NE.13, "F13NC1", startRow=9, startCol=1, header=FALSE) -->
+<!-- writeWorksheet(wb, NE.13.Stats, "F13NC1", startRow=54, startCol=1, header=FALSE) -->
+<!-- saveWorkbook(wb) -->
+<!-- ``` -->
+
+### Field 14
+
+```{r NE4.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, NE.14, "F14NC1", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, NE.14.Stats, "F14NC1", startRow=54, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+### Field 15
+
+```{r NE5.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, NE.15, "F15NC1", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, NE.15.Stats, "F15NC1", startRow=54, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+## North (1) Full (B)
+
+### Field 11
+
+```{r NF1.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, NF.11, "F11NC2", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, NF.11.Stats, "F11NC2", startRow=55, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+### Field 12
+
+```{r NF2.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, NF.12, "F12NC2", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, NF.12.Stats, "F12NC2", startRow=55, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+<!-- ### Field 13 -->
+
+<!-- ```{r NF3.Export.to.Formatted.Exel, comment=NA, echo=FALSE, message=FALSE} -->
+<!-- writeWorksheet(wb, NF.13, "F13NC2", startRow=9, startCol=1, header=FALSE) -->
+<!-- writeWorksheet(wb, NF.13.Stats, "F13NC2", startRow=55, startCol=1, header=FALSE) -->
+<!-- saveWorkbook(wb) -->
+<!-- ``` -->
+
+### Field 14
+
+```{r NF4.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, NF.14, "F14NC2", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, NF.14.Stats, "F14NC2", startRow=55, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+### Field 15
+
+```{r NF5.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, NF.15, "F15NC2", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, NF.15.Stats, "F15NC2", startRow=55, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+
+## Central (2) Early (A)
+
+<!-- ### Field 21 -->
+
+<!-- ```{r CE1.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE} -->
+<!-- writeWorksheet(wb, CE.21, "F21NC1", startRow=9, startCol=1, header=FALSE) -->
+<!-- writeWorksheet(wb, CE.21.Stats, "F21NC1", startRow=62, startCol=1, header=FALSE) -->
+<!-- saveWorkbook(wb) -->
+<!-- ``` -->
+
+### Field 22
+
+```{r CE2.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, CE.22, "F22NC1", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, CE.22.Stats, "F22NC1", startRow=62, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+### Field 23
+
+```{r CE3.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, CE.23, "F23NC1", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, CE.23.Stats, "F23NC1", startRow=62, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+### Field 24
+
+```{r CE4.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, CE.24, "F24NC1", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, CE.24.Stats, "F24NC1", startRow=62, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+### Field 25
+
+```{r CE5.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, CE.25, "F25NC1", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, CE.25.Stats, "F25NC1", startRow=62, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+## Central (2) Full (B)
+
+<!-- ### Field 21 -->
+
+<!-- ```{r CF1.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE} -->
+<!-- writeWorksheet(wb, CF.21, "F21NC2", startRow=9, startCol=1, header=FALSE) -->
+<!-- writeWorksheet(wb, CF.21.Stats, "F21NC2", startRow=62, startCol=1, header=FALSE) -->
+<!-- saveWorkbook(wb) -->
+<!-- ``` -->
+
+### Field 22
+
+```{r CF2.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, CF.22, "F22NC2", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, CF.22.Stats, "F22NC2", startRow=62, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+### Field 23
+
+```{r CF3.Export.to.Formatted.Exel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, CF.23, "F23NC2", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, CF.23.Stats, "F23NC2", startRow=62, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+### Field 24
+
+```{r CF4.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, CF.24, "F24NC2", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, CF.24.Stats, "F24NC2", startRow=62, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+### Field 25
+
+```{r CF5.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, CF.25, "F25NC2", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, CF.25.Stats, "F25NC2", startRow=62, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+
+## South (3) Early (A)
+
+<!-- ### Field 31 -->
+
+<!-- ```{r SE1.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE} -->
+<!-- writeWorksheet(wb, SE.31, "F31NC1", startRow=9, startCol=1, header=FALSE) -->
+<!-- writeWorksheet(wb, SE.31.Stats, "F31NC1", startRow=54, startCol=1, header=FALSE) -->
+<!-- saveWorkbook(wb) -->
+<!-- ``` -->
+
+### Field 32
+
+```{r SE2.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, SE.32, "F32NC1", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, SE.32.Stats, "F32NC1", startRow=54, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+### Field 33
+
+```{r SE3.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, SE.33, "F33NC1", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, SE.33.Stats, "F33NC1", startRow=54, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+### Field 34
+
+```{r SE4.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, SE.34, "F34NC1", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, SE.34.Stats, "F34NC1", startRow=54, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+### Field 35
+
+```{r SE5.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, SE.35, "F35NC1", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, SE.35.Stats, "F35NC1", startRow=54, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+## South (3) Full (B)
+
+<!-- ### Field 31 -->
+
+<!-- ```{r SF1.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE} -->
+<!-- writeWorksheet(wb, SF.31, "F31NC2", startRow=9, startCol=1, header=FALSE) -->
+<!-- writeWorksheet(wb, SF.31.Stats, "F31NC2", startRow=46, startCol=1, header=FALSE) -->
+<!-- saveWorkbook(wb) -->
+<!-- ``` -->
+
+### Field 32
+
+```{r SF2.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, SF.32, "F32NC2", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, SF.32.Stats, "F32NC2", startRow=46, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+### Field 33
+
+```{r SF3.Export.to.Formatted.Exel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, SF.33, "F33NC2", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, SF.33.Stats, "F33NC2", startRow=46, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+### Field 34
+
+```{r SF4.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, SF.34, "F34NC2", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, SF.34.Stats, "F34NC2", startRow=46, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
+
+### Field 35
+
+```{r SF5.Export.to.Formatted.Excel, comment=NA, echo=FALSE, message=FALSE}
+writeWorksheet(wb, SF.35, "F35NC2", startRow=9, startCol=1, header=FALSE)
+writeWorksheet(wb, SF.35.Stats, "F35NC2", startRow=46, startCol=1, header=FALSE)
+saveWorkbook(wb)
+```
