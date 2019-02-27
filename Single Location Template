@@ -1,0 +1,902 @@
+---
+title: "**Single Location Statistical Analysis**"
+author: '`r params$author`'
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output: 
+  html_document:
+    theme: darkly
+    toc: true
+    toc_float:
+      collapsed: true
+params:
+  author:
+    label: "Analysis Conducted By:"
+    value: Ryan Budnik
+    input: select
+    choices: [Ryan Budnik, Graydon Marzen, Jim Rouse, Ryan Frasch, Shawn Bryant]
+  data:
+    label: "Dataset:"
+    value: yt18.csv
+    input: select
+    choices: [18CC.csv,yt18.csv]
+  book.name:
+    label: "Book Name:"
+    value: CF811
+    input: select
+    choices: [CF811,CF812,CF813,CF814,CF815,CF821,CF822,CF823,CF824,CF825,CF831,CF832,CF833,CF834,CF835]
+  exp:
+    label: "Experiment:"
+    value: C81A
+    input: select
+    choices: [C81A,C81B,C82A,C82B,C83A,C83B]
+  year:
+    label: "Year"
+    value: 2018
+    input: select
+    choices: [2018, 2017, 2016]
+---
+
+```{r logo, cache=TRUE, echo=FALSE}
+htmltools::img(src = knitr::image_uri(file.path("C:","Users","rjbudnik","Documents", "YieldTrialSingleLoc","inst","rmarkdown","templates","report","skeleton","ICIA_logo.png")), 
+               alt = 'logo',
+               style = 'position:absolute; top:0; right:0; padding:10px;')
+```
+
+---
+
+# Overview:
+The following report renders a single location mixed model analysis with corresponding figures for the `r params$year`-- **`r params$exp`** Trial, at the **`r params$book.name`** location.
+
+```{r libs, include = FALSE}
+library(rmarkdown)
+library(knitr)
+library(dplyr)
+library(agricolae)
+library(nlme)
+library(lme4)
+library(lmerTest)
+library(randomcoloR)
+library(car)
+library(predictmeans)
+library(shiny)
+library(shinythemes)
+library(psych)
+library(MuMIn)
+```
+
+- Corn Coversion Factor = **8.067**
+- Bean Conversion Factor = **7.779**
+
+```{r setup, echo = FALSE}
+###Set wd & Import CSV Dataset:
+df<-read.csv("yt18.csv", header=T, na.strings=c("", " ", "NA"))
+
+###CCF
+CCF<-8.067
+df <- df%>%mutate (yld = (wt*CCF*(100-moist)/84.5))
+###BCF
+# BCF<-7.779
+# df <- df%>%mutate (yld = (wt*BCF))
+
+###Subset data of interest:
+data.withdiscards<-filter(df, book.name==c(params$book.name) & exp==c(params$exp))
+
+###Replace Discarded Plots with NA:
+data <- data.withdiscards%>%mutate(yld=replace(yld, plot.discarded=="Yes", NA))
+
+###View Classifications & Set Factors:
+data$book.name<-factor(data$book.name)
+data$exp<-factor(data$exp)
+data$entry<-factor(data$entry)
+data$ped.id<-factor(data$ped.id)
+data$code<-factor(data$code)
+data$range<-factor(data$range)
+data$pass<-factor(data$pass)
+data$rep<-factor(data$rep)
+
+###Mean & IQRS:
+max.yld <- quantile(data$yld,0.75, na.rm=TRUE) + (IQR(data$yld, na.rm=TRUE) * 1.5 )
+min.yld <- quantile(data$yld,0.25, na.rm=TRUE) - (IQR(data$yld, na.rm=TRUE) * 1.5 )
+avg.yld <- mean(data$yld, na.rm = TRUE)
+```
+
+# Data Visualization: {.tabset .tabset-fade}
+
+## Summary
+
+```{r summary, echo = FALSE, cols.print=15, rows.print=11, warning=FALSE}
+sum.less<-data %>% select("exp", "book.name", "rep", "entry", "plot", "plot.discarded", "pass", "range", "wt", "moist", "yld")
+des<-describe(sum.less, skew=FALSE, ranges=TRUE)
+paged_table(des, options(scipen=999, digits=4))
+```
+
+## Aggregation
+
+```{r aggregation, echo = FALSE, rows.print=15, warning=FALSE}
+options(digits=5)
+aggdf <- data.frame(aggregate(yld~entry, data=data, function(x) c(length(x))),aggregate(yld~entry, data=data, function(x) c(min(x))),aggregate(yld~entry, data=data, function(x) c(max(x))),aggregate(yld~entry, data=data, function(x) c(mean(x))))
+aggdf <- aggdf[,c(1,2,4,6,8)]
+colnames(aggdf)<-c("Entry", "Count", "Min", "Max", "Mean")
+
+paged_table(aggdf)
+```
+
+## Histogram
+
+```{r histo.yld, echo = FALSE, fig.width=10, fig.height=6.5}
+histo<-hist(data$yld, breaks=seq(0,300, l=90), col="purple", main="Frequency of Yields", xlab="Yield")
+abline(v = max.yld, col="red")
+abline(v = avg.yld, col="red", lwd=c(3))
+abline(v = min.yld, col="red")
+```
+
+## Barplot
+
+``` {r bar.yld, echo = FALSE, fig.width=10, fig.height=7}
+palette <- randomColor(length(unique(data$entry)))
+data$color <- palette[as.factor(data$entry)]
+barplot(data$yld, names.arg=data$entry, ylim=c(0,300), main="Distribution of Yield", ylab="Yield", xlab="Entry", col=data$color, cex.names=.53)
+abline(h = max.yld, col="red")
+abline(h = avg.yld, col="red", lwd=c(3))
+abline(h = min.yld, col="red")
+```
+
+## Boxplot
+
+``` {r boxplot, echo = FALSE, fig.width=10, fig.height=7}
+Boxplot(data$yld~data$entry,id=TRUE, main="2018 Yield Across Entries", xlab="Entry", ylab="Yield", las=2)
+abline(h = max.yld, col="red")
+abline(h = avg.yld, col="red", lwd=c(3))
+abline(h = min.yld, col="red")
+```
+
+# Mixed Model Analysis: {.tabset .tabset-fade}
+
+**YIELD = ENTRY**
+
+* Random: + REP + PASS(REP) + RANGE(REP)
+
+```{r model, comment=NA, echo=FALSE, message=FALSE}
+model1<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:range), data=data, REML=TRUE)
+# summary(model1)
+```
+
+## ANOVA Tables
+
+Generally speaking, the smaller the *p-value*, and the larger the *F-statistic* the better the model fit and grounds for rejection of the null hypothesis.
+
+ANOVA uses the *F-statistic* to determine whether the variability between group means is larger than the variability of the observations within the groups. If this ratio is sufficiently large, you can conclude that not all the means are equal. **A low *p-value* suggests that your sample provides enough evidence that you can reject the null hypothesis** for the entire population.
+
+  + The **null hypothesis** states that the model with no independent variables fits the data as well as your model.
+
+  + The **alternative hypothesis** says that your model fits the data better than the intercept-only model.
+
+
+Analysis of Variance Table of **Type I** with Kenward-Roger approximation for degrees of freedom:
+
+```{r modelanova1, cols.print=9, echo = FALSE}
+options(scipen=3)
+paged_table(anovalmer(model1))
+```
+
+**Type III** Analysis of Variance Table with Satterthwaite's method:
+
+```{r modelanova2, echo = FALSE}
+options(scipen=3)
+paged_table(anova(model1))
+```
+
+## Least Squares (LS) Means {.tabset .tabset-fade}
+
++ Observed Means: Regular arithmetic means that can be computed by hand directly on your data without reference to any statistical model.
+
++ **Least Squares Means (LS Means):** Means that are computed based on a linear model such as ANOVA.
+
+### By Entry
+
+```{r lsm.by.entry, comment=NA, echo=FALSE, cols.print=12, rows.print=15, message=FALSE}
+options(scipen=6)
+LSM.Entry<-ls_means(model1, which="entry")
+data.small<-data%>%filter(rep==1)%>%select("exp", "book.name", "company", "hybrid")
+ls.all<-cbind(data.small, aggdf, LSM.Entry$Estimate)
+names(ls.all)[10]<-"LS Mean"
+names(ls.all)[1:4]<-c("Exp","Loc","Company","Hybrid")
+ls.all$Company<-factor(ls.all$Company)
+ls.all$Hybrid<-factor(ls.all$Hybrid)
+ls.all$Entry<-as.numeric(ls.all$Entry)
+ls.all$Count<-as.numeric(ls.all$Count)
+paged_table(ls.all)
+```
+
+### Average & Variance
+
+```{r lsm.avg.var, comment=NA, echo=FALSE, message=FALSE}
+lsm.entry<-mean(LSM.Entry$Estimate)
+lsv.entry<-var(LSM.Entry$Estimate)
+Avg.Var.Table<-data.frame("Source"=c("Entry"), "Average" = c(lsm.entry), "Variance" = c(lsv.entry))
+paged_table(Avg.Var.Table)
+```
+
+
+## Random-Effects Table
+
+An ANOVA-like table with tests of random-effect terms in the model. **Each random-effect term is reduced or removed** and likelihood ratio tests of model reductions are presented.
+
+```{r modelsum, echo=FALSE, message=FALSE}
+options(scipen=3)
+paged_table(ranova(model1))
+```
+
+## CV, RMSE & R²
+
+**Coefficient of Vairance (CV):**
+
+The lower the CV, the smaller the residuals relative to the predicted value.  This is suggestive of a good model fit. 
+
+* **SMALLER IS BETTER!** (i.e. The model with the smaller CV has predicted values that are closer to the actual values.)
+
+
+**Root Mean Square Error(RMSE):**
+
+*RMSE is an absolute measure of fit.*
+
+The standard deviation of the residuals. RMSE physically measures how spread out these residuals are from the line of best fit. The RMSE is a measure of the average deviation of the estimates from the observed values.
+
+* **SMALLER IS BETTER!** (i.e. lower values of RMSE indicate better fit.)
+
+
+**R-squared (R²):**
+
+*R² is a relative measure of fit.*
+
+R² is the proportional improvement in prediction from the regression model, compared to the mean model. R² indicates the goodness of fit of the model. The fraction of the total sum of squares that is explained by the regression. Scaled from 0 to 1.
+
+* **LARGER IS BETTER!** (i.e. values closer to 1 indicate better fit.)
+
+```{r model1.cv.rmse, comment=NA, echo = FALSE, message=FALSE}
+##CV from "LSDer" package:
+mod1.cv<-LSDer::CVer(model1)
+
+# ####NOT THE SAME AS SAS::::
+# ##LSD from "LSDer" package:
+# mod1.lsd.90<-LSDer::LSDer(model1, "entry", level=0.90)
+# mod1.lsd.75<-LSDer::LSDer(model1, "entry", level=0.75)
+# mod1.lsd.90
+# mod1.lsd.75
+# 
+# # ##"Plantbreeding" package LSD approach:
+# vcor<-as.data.frame(VarCorr(model1))
+# entryL<-as.numeric(nlevels(data$entry))
+# t_alpha<-qt(p=1-(0.25/2), df=(entryL-1))
+# V_R<-subset(vcor, grp == "Residual", vcov, drop = TRUE)
+# n_rep<-as.numeric(n_distinct(data[,"rep"]))
+# LSD.v2<-t_alpha*sqrt(2*(V_R/n_rep))
+# LSD.v2
+
+mod1.rmse<-sqrt(mean(residuals(model1)^2))
+mod1.R2<-r.squaredLR(model1)
+CV.RMSE.R2.Table1<-data.frame("CV" = c(mod1.cv), "RMSE" = c(mod1.rmse), "R²" = c(mod1.R2))
+paged_table(CV.RMSE.R2.Table1)
+```
+
+## Fisher's LSD
+
+**Fisher's Least Significant Differnce (LSD):**
+
+Least significant difference is used to compare means of different treatments that have an equal number of replications.
+
+* **The yields must be greater than the LSD value between any two treatments to be considered significant.**
+
+``` {r model1.predict.25, comment=NA, echo = FALSE, fig.width=10, fig.height=6.5}
+pre1<-predictmeans(model1, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=FALSE, newwd=FALSE)
+LSDpre1<-pre1[["LSD"]][["Aveg.LSD"]]
+LSD.Table1<-data.frame("."="Average LSD at 75% Confidence Level =", "VALUE" = as.factor(c(LSDpre1)))
+paged_table(LSD.Table1)
+pre1.1<-predictmeans(model1, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=TRUE, newwd=FALSE)
+```
+
+```{r model1.lsdplot, echo=FALSE, fig.width=10, fig.height=6.5}
+pre1.2<-predictmeans(model1, "entry", pairwise=TRUE, level=0.25, pplot=TRUE, mplot=FALSE, newwd=FALSE)
+```
+
+
+# Outlier Detection: {.tabset .tabset-fade}
+
+## Normal Q-Q Plot
+
+QQ plot (or quantile-quantile plot) draws the correlation between a given sample and the normal distribution. A 45-degree reference line is also plotted. QQ plots are used to visually check the normality of the data.
+
+```{r qq, echo = FALSE, fig.width=9, warning = FALSE}
+qq<-qqnorm(resid(model1), pch=23, bg="black")
+qqline(resid(model1), col="red", lwd=c(2))
+text(qq, rownames(data), cex=0.8, col= "blue4", pos=4, offset = 0.5)
+text(qq, label=(data$entry), cex=0.8, col= "red4", pos=4, offset = 1.6)
+```
+
+1. Data Points = Residuals for linear mixed model.
+2. <span style="color:blue">Blue</span> Labels = **Row** number within dataframe.
+3. <span style="color:red">Red</span> Labels = **Entry** number.
+
+## Cook's Distance
+
+Cook's distance is useful for identifying outliers in the X values (observations for predictor variables). It also shows the influence of each observation on the fitted response values. An observation with Cook's distance larger than three times the mean Cook's distance might be an outlier.
+
+  + Graphical Reference Thresholds:
+      1. 10/*n*-*k*-1
+      2. 8/*n*-*k*-1
+      3. 4/*n*-*k*-1, (**Hair et.al**,1998)
+     
+      where,
+      + *n* = sample size
+      + *k* = number of independent variables
+
+```{r cook, echo = FALSE, fig.width=9, message=FALSE}
+sample_size<-as.numeric(nrow(data))
+entryL<-as.numeric(nlevels(data$entry))
+Cooksd<-CookD(model1, idn=5, newwd=FALSE)
+abline(h = (10/(sample_size-entryL-1)), col="red")
+abline(h = (8/(sample_size-entryL-1)), col="red", lwd=c(2))
+abline(h = (4/(sample_size-entryL-1)), col="red", lwd=c(3))
+```
+
+
+# Discards: {.tabset .tabset-fade}
+
+**Plot Discards Identified Pre-Analysis:**
+
+```{r discards, echo = FALSE, cols.print=13}
+Discards<-subset(data.withdiscards, plot.discarded=="Yes")
+Discards<-Discards %>% select("exp", "book.name", "company", "hybrid", "entry", "rep",  "pass", "range", "wt", "moist", "yld")
+paged_table(Discards)
+```
+
+# Cleaned Models: {.tabset .tabset-fade}
+
+## Outside Minimum IQR: {.tabset .tabset-fade}
+
+Replaced all low values outside the minimum IQR value, as visualized in the barplot.
+
+### Summary
+
+Low yielding rows in which yield values were replaced with NA.
+
+```{r modelc1, echo = FALSE, cols.print=13}
+##Replace All Low Values Identified in  Histogram (e.g.< IQR Minimum bu/ac) with NA:
+IQRNoLow<-subset(data, data$yld < min.yld)
+NoLowRows<-as.numeric(rownames(IQRNoLow))
+nolow<-data[NoLowRows, ]
+nolow<-nolow %>% select("exp", "book.name", "company", "hybrid", "entry", "plot", "rep",  "pass", "range", "wt", "moist", "yld")
+paged_table(nolow)
+IQRClean1<-data
+IQRClean1$yld<-replace(IQRClean1$yld, NoLowRows, NA)
+##Model Without Histogram Identified Low Yields:
+model2<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:range), data=IQRClean1, REML=TRUE)
+```
+
+
+### LS Means {.tabset .tabset-fade}
+
++ Observed Means: Regular arithmetic means that can be computed by hand directly on your data without reference to any statistical model.
+
++ **Least Squares Means (LS Means):** Means that are computed based on a linear model such as ANOVA.
+
+#### By Entry
+
+```{r lsm.by.entry2, comment=NA, echo=FALSE, cols.print=8, rows.print=15, message=FALSE}
+options(scipen=6)
+LSM.Entry2<-ls_means(model2, which="entry")
+paged_table(LSM.Entry2)
+```
+
+#### Average & Variance
+
+```{r lsm.avg.var2, comment=NA, echo=FALSE, message=FALSE}
+lsm.entry2<-mean(LSM.Entry2$Estimate)
+lsv.entry2<-var(LSM.Entry2$Estimate)
+Avg.Var.Table2<-data.frame("Source"=c("Entry"), "Average" = c(lsm.entry2), "Variance" = c(lsv.entry2))
+paged_table(Avg.Var.Table2)
+```
+
+### ANOVA Tables
+
+Analysis of Variance Table of **Type I** with Kenward-Roger approximation for degrees of freedom:
+
+```{r modelc1.anova1, cols.print=9, echo=FALSE}
+paged_table(anovalmer(model2))
+```
+
+**Type III** Analysis of Variance Table with Satterthwaite's method:
+
+```{r modelc1.anova2, echo=FALSE}
+paged_table(anova(model2))
+```
+
+### Random-Effects
+
+ANOVA-like table for random-effects: Single term deletions;
+
+Model: yld ~ entry + (1 | rep) + (1 | rep:pass) + (1 | rep:range)
+
+```{r modelc1.reml, echo=FALSE, message=FALSE}
+paged_table(ranova(model2))
+```
+
+
+### CV, RMSE & R²
+
+**Coefficient of Vairance (CV):**
+
+The lower the CV, the smaller the residuals relative to the predicted value.  This is suggestive of a good model fit. 
+
+* **SMALLER IS BETTER!** (i.e. The model with the smaller CV has predicted values that are closer to the actual values.)
+
+
+**Root Mean Square Error(RMSE):**
+
+RMSE is an absolute measure of fit.
+
+The standard deviation of the residuals. RMSE physically measures how spread out these residuals are from the line of best fit. The RMSE is a measure of the average deviation of the estimates from the observed values.
+
+* **SMALLER IS BETTER!** (i.e. lower values of RMSE indicate better fit.)
+
+
+**R-squared (R²):**
+
+R² is a relative measure of fit.
+
+R² is the proportional improvement in prediction from the regression model, compared to the mean model. R-squared indicates the goodness of fit of the model. The fraction of the total sum of squares that is explained by the regression. Scaled from 0 to 1.
+
+* **LARGER IS BETTER!** (i.e. values closer to 1 indicate better fit.)
+
+```{r model2.cv.rmse, comment=NA, echo = FALSE, message=FALSE}
+##CV from "LSDer" package:
+mod2.cv<-LSDer::CVer(model2)
+
+mod2.rmse<-sqrt(mean(residuals(model2)^2))
+mod2.R2<-r.squaredLR(model2)
+CV.RMSE.R2.Table2<-data.frame("CV" = c(mod2.cv), "RMSE" = c(mod2.rmse), "R²" = c(mod2.R2))
+paged_table(CV.RMSE.R2.Table2)
+```
+
+### Fisher's LSD
+
+**Fisher's Least Significant Differnce (LSD):**
+
+Least significant difference is used to compare means of different treatments that have an equal number of replications.
+
+* **The yields must be greater than the LSD value between any two treatments to be considered significant.**
+
+``` {r model2.predict.25, comment=NA, echo = FALSE, fig.width=10, fig.height=6.5}
+pre2<-predictmeans(model2, "entry", pairwise=TRUE, level=0.25, plot=FALSE, newwd=FALSE)
+LSDpre2<-pre2[["LSD"]][["Aveg.LSD"]]
+LSD.Table2<-data.frame("."="Average LSD at 75% Confidence Level =", "VALUE" = as.factor(c(LSDpre2)))
+paged_table(LSD.Table2)
+pre2.1<-predictmeans(model2, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=TRUE, newwd=FALSE)
+```
+
+```{r model2.lsdplot, echo=FALSE, fig.width=10, fig.height=6.5}
+pre2.2<-predictmeans(model2, "entry", pairwise=TRUE, level=0.25, pplot=TRUE, mplot=FALSE, newwd=FALSE)
+```
+
+## Outside Min/Max IQRs: {.tabset .tabset-fade}
+
+Replaced all values outside the minimum and maximum IQRs with NA, as visualized in the barplot.
+
+### Summary
+
+```{r modelc2, echo = FALSE, cols.print=13}
+##Replace values outside the minimum and maximum IQR values with NA:
+IQRNoHigh<-subset(data, data$yld > max.yld)
+NoHighRows<-as.numeric(rownames(IQRNoHigh))
+nohigh<-data[NoHighRows, ]
+nohigh<-nohigh %>% select("exp", "book.name", "company", "hybrid", "entry", "plot", "rep",  "pass", "range", "wt", "moist", "yld")
+IQRClean2<-data
+IQRClean2$yld<-replace(IQRClean2$yld, NoLowRows, NA)
+IQRClean2$yld<-replace(IQRClean2$yld, NoHighRows, NA)
+##Model Without Histogram Identified Low Yields:
+model3<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:range), data=IQRClean2, REML=TRUE)
+```
+
+**Low** yielding rows in which yield values were replaced with NA.
+
+```{r modelc2.datarl, comment=NA, echo = FALSE}
+paged_table(nolow)
+```
+
+**High** yielding rows in which yield values were replaced with NA.
+
+```{r modelc2.datarhl, comment=NA, echo = FALSE}
+paged_table(nohigh)
+```
+
+
+### LS Means {.tabset .tabset-fade}
+
++ Observed Means: Regular arithmetic means that can be computed by hand directly on your data without reference to any statistical model.
+
++ **Least Squares Means (LS Means):** Means that are computed based on a linear model such as ANOVA.
+
+#### By Entry
+
+```{r lsm.by.entry3, comment=NA, echo=FALSE, cols.print=8, rows.print=15, message=FALSE}
+options(scipen=6)
+LSM.Entry3<-ls_means(model3, which="entry")
+paged_table(LSM.Entry3)
+```
+
+#### Average & Variance
+
+```{r lsm.avg.var3, comment=NA, echo=FALSE, message=FALSE}
+lsm.entry3<-mean(LSM.Entry3$Estimate)
+lsv.entry3<-var(LSM.Entry3$Estimate)
+Avg.Var.Table3<-data.frame("Source"=c("Entry"), "Average" = c(lsm.entry3), "Variance" = c(lsv.entry3))
+paged_table(Avg.Var.Table3)
+```
+
+### ANOVA Tables
+
+Analysis of Variance Table of **Type I** with Kenward-Roger approximation for degrees of freedom:
+
+```{r modelc2.anova1, cols.print=9, echo=FALSE}
+paged_table(anovalmer(model3))
+```
+
+**Type III** Analysis of Variance Table with Satterthwaite's method:
+
+```{r modelc2.anova3, echo=FALSE}
+paged_table(anova(model3))
+```
+
+### Random-Effects
+
+ANOVA-like table for random-effects: Single term deletions;
+
+Model: yld ~ entry + (1 | rep) + (1 | rep:pass) + (1 | rep:range)
+
+```{r modelc2.reml, echo=FALSE, meesage=FALSE}
+paged_table(ranova(model3))
+```
+
+### CV, RMSE & R²
+
+**Coefficient of Vairance (CV):**
+
+The lower the CV, the smaller the residuals relative to the predicted value.  This is suggestive of a good model fit. 
+
+* **SMALLER IS BETTER!** (i.e. The model with the smaller CV has predicted values that are closer to the actual values.)
+
+
+**Root Mean Square Error(RMSE):**
+
+RMSE is an absolute measure of fit.
+
+The standard deviation of the residuals. RMSE physically measures how spread out these residuals are from the line of best fit. The RMSE is a measure of the average deviation of the estimates from the observed values.
+
+* **SMALLER IS BETTER!** (i.e. lower values of RMSE indicate better fit.)
+
+
+**R-squared (R²):**
+
+R² is a relative measure of fit.
+
+R² is the proportional improvement in prediction from the regression model, compared to the mean model. R-squared indicates the goodness of fit of the model. The fraction of the total sum of squares that is explained by the regression. Scaled from 0 to 1.
+
+* **LARGER IS BETTER!** (i.e. values closer to 1 indicate better fit.)
+
+```{r model3.cv.rmse, comment=NA, echo = FALSE, message=FALSE}
+##CV from "LSDer" package:
+mod3.cv<-LSDer::CVer(model3)
+
+mod3.rmse<-sqrt(mean(residuals(model3)^2))
+mod3.R2<-r.squaredLR(model3)
+CV.RMSE.R2.Table3<-data.frame("CV" = c(mod3.cv), "RMSE" = c(mod3.rmse), "R²" = c(mod3.R2))
+paged_table(CV.RMSE.R2.Table3)
+```
+
+### Fisher's LSD
+
+**Fisher's Least Significant Differnce (LSD):**
+
+Least significant difference is used to compare means of different treatments that have an equal number of replications.
+
+* **The yields must be greater than the LSD value between any two treatments to be considered significant.**
+
+``` {r model3.predict.25, comment=NA, echo = FALSE, fig.width=10, fig.height=6.5}
+pre3<-predictmeans(model3, "entry", pairwise=TRUE, level=0.25, plot=FALSE, newwd=FALSE)
+LSDpre3<-pre3[["LSD"]][["Aveg.LSD"]]
+LSD.Table3<-data.frame("."="Average LSD at 75% Confidence Level =", "VALUE" = as.factor(c(LSDpre3)))
+paged_table(LSD.Table3)
+pre3.1<-predictmeans(model3, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=TRUE, newwd=FALSE)
+```
+
+```{r model3.lsdplot, echo=FALSE, fig.width=10, fig.height=6.5}
+pre3.2<-predictmeans(model3, "entry", pairwise=TRUE, level=0.25, pplot=TRUE, mplot=FALSE, newwd=FALSE)
+```
+
+## Residual Deviations: {.tabset .tabset-fade}
+
+Replace residual outliers identified in  Q-Q Plot with NA for all resdiual values 2.5 times the standard deviation above/below the residual mean. 
+
+### Summary
+
+Influential residual deviating rows in which yield values were replaced with NA.
+
+```{r modelc3, echo = FALSE, cols.print=13}
+# ##Replace All Residual Outliers 2.5 times the standard deviation above/below the 
+# ##residual mean in  Q-Q Plot with NA:
+influentialQQ<-resid(model1)[abs(resid(model1)-mean(resid(model1)))>2.5*sd(resid(model1))]
+influentialQQ<-as.numeric(names(influentialQQ))
+influentailqq<-data[influentialQQ, ]
+influentailqq<-influentailqq %>% select("exp", "book.name", "company", "hybrid", "entry", "plot", "rep",  "pass", "range", "wt", "moist", "yld")
+paged_table(influentailqq)
+QQClean<-data
+QQClean$yld<-replace(QQClean$yld, influentialQQ, NA)
+model4<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:range), data=QQClean, REML=TRUE)
+
+# ##Alternatively, MUST designate trim = # of stddev above/below the residual means.
+# ##Can NOT get to pull up "data" from romr Function.
+# ResidualClean<-romr.fnc(model1, data, trim = 2.5)
+# ResidualClean<-ResidualClean[["data"]]
+# ##Model Without Q-Q Residual Outliers:
+# model3<-lmer(yld~entry + (1 | rep) + (1|rep:pass) + (1 | rep:range), data=ResidualClean, REML=TRUE)
+```
+
+
+### LS Means {.tabset .tabset-fade}
+
++ Observed Means: Regular arithmetic means that can be computed by hand directly on your data without reference to any statistical model.
+
++ **Least Squares Means (LS Means):** Means that are computed based on a linear model such as ANOVA.
+
+#### By Entry
+
+```{r lsm.by.entry4, comment=NA, echo=FALSE, cols.print=8, rows.print=15, message=FALSE}
+options(scipen=6)
+LSM.Entry4<-ls_means(model4, which="entry")
+paged_table(LSM.Entry4)
+```
+
+#### Average & Variance
+
+```{r lsm.avg.var4, comment=NA, echo=FALSE, message=FALSE}
+lsm.entry4<-mean(LSM.Entry4$Estimate)
+lsv.entry4<-var(LSM.Entry4$Estimate)
+Avg.Var.Table4<-data.frame("Source"=c("Entry"), "Average" = c(lsm.entry4), "Variance" = c(lsv.entry4))
+paged_table(Avg.Var.Table4)
+```
+
+### ANOVA Tables
+
+Analysis of Variance Table of **Type I** with Kenward-Roger approximation for degrees of freedom:
+
+```{r modelc3.anova1, cols.print=9, echo=FALSE}
+paged_table(anovalmer(model4))
+```
+
+**Type III** Analysis of Variance Table with Satterthwaite's method:
+
+```{r modelc3.anova2, echo=FALSE}
+paged_table(anova(model4))
+```
+
+### Random-Effects
+
+```{r modelc3.reml, echo=FALSE, message=FALSE}
+paged_table(ranova(model4))
+```
+
+### CV, RMSE & R²
+
+**Coefficient of Vairance (CV):**
+
+The lower the CV, the smaller the residuals relative to the predicted value.  This is suggestive of a good model fit. 
+
+* **SMALLER IS BETTER!** (i.e. The model with the smaller CV has predicted values that are closer to the actual values.)
+
+
+**Root Mean Square Error(RMSE):**
+
+RMSE is an absolute measure of fit.
+
+The standard deviation of the residuals. RMSE physically measures how spread out these residuals are from the line of best fit. The RMSE is a measure of the average deviation of the estimates from the observed values.
+
+* **SMALLER IS BETTER!** (i.e. lower values of RMSE indicate better fit.)
+
+
+**R-squared (R²):**
+
+R² is a relative measure of fit.
+
+R² is the proportional improvement in prediction from the regression model, compared to the mean model. R-squared indicates the goodness of fit of the model. The fraction of the total sum of squares that is explained by the regression. Scaled from 0 to 1.
+
+* **LARGER IS BETTER!** (i.e. values closer to 1 indicate better fit.)
+
+```{r model4.cv.rmse, comment=NA, echo = FALSE, message=FALSE}
+##CV from "LSDer" package:
+mod4.cv<-LSDer::CVer(model4)
+
+mod4.rmse<-sqrt(mean(residuals(model4)^2))
+mod4.R2<-r.squaredLR(model4)
+CV.RMSE.R2.Table4<-data.frame("CV" = c(mod4.cv), "RMSE" = c(mod4.rmse), "R²" = c(mod4.R2))
+paged_table(CV.RMSE.R2.Table4)
+```
+
+### Fisher's LSD
+
+**Fisher's Least Significant Differnce (LSD):**
+
+Least significant difference is used to compare means of different treatments that have an equal number of replications.
+
+* **The yields must be greater than the LSD value between any two treatments to be considered significant.**
+
+``` {r model4.predict.25, comment=NA, echo = FALSE, fig.width=10, fig.height=6.5}
+pre4<-predictmeans(model4, "entry", pairwise=TRUE, level=0.25, plot=FALSE, newwd=FALSE)
+LSDpre4<-pre4[["LSD"]][["Aveg.LSD"]]
+LSD.Table4<-data.frame("."="Average LSD at 75% Confidence Level =", "VALUE" = as.factor(c(LSDpre4)))
+paged_table(LSD.Table4)
+pre4.1<-predictmeans(model4, "entry", pairwise=TRUE, level=0.25, pplot=FALSE, mplot=TRUE, newwd=FALSE)
+```
+
+```{r model4.lsdplot, echo=FALSE, fig.width=10, fig.height=6.5}
+pre4.2<-predictmeans(model4, "entry", pairwise=TRUE, level=0.25, pplot=TRUE, mplot=FALSE, newwd=FALSE)
+```
+
+## Cook's Distance: {.tabset .tabset-fade}
+
+Replace influential Values determined Via Cook's Distance with NA.
+
+-Cook' Distance outliers: **4/n-k-1**
+-used: **10/n-k-1** 
+-[i.e. 2.5 x Cook's Distance Significance]
+
+### Summary
+
+Influential Cook's Distance rows in which yield values were replaced with NA.
+
+```{r modelc4, echo = FALSE, cols.print=13}
+##Replace "Influential" Values Determined Via Cook's Distance, with NA:
+influentialcooks <- as.numeric(names(Cooksd)[(Cooksd > (h=(10/(sample_size-entryL-1))))])
+influentialCooks<-data[influentialcooks, ]
+influentialCooks<-influentialCooks %>% select("exp", "book.name", "company", "hybrid", "entry", "plot", "rep",  "pass", "range", "wt", "moist", "yld")
+paged_table(influentialCooks)
+CooksClean<-data
+CooksClean$yld<-replace(CooksClean$yld, influentialcooks, NA)
+##Cooks Clean Model:
+model5<-lmer(yld~entry + (1|rep) + (1|rep:pass) + (1|rep:range), data=CooksClean, REML=TRUE)
+```
+
+### LS Means {.tabset .tabset-fade}
+
++ Observed Means: Regular arithmetic means that can be computed by hand directly on your data without reference to any statistical model.
+
++ **Least Squares Means (LS Means):** Means that are computed based on a linear model such as ANOVA.
+
+#### By Entry
+
+```{r lsm.by.entry5, comment=NA, echo=FALSE, cols.print=8, rows.print=15, message=FALSE}
+options(scipen=6)
+LSM.Entry5<-ls_means(model5, which="entry")
+paged_table(LSM.Entry5)
+```
+
+#### Average & Variance
+
+```{r lsm.avg.var5, comment=NA, echo=FALSE, message=FALSE}
+lsm.entry5<-mean(LSM.Entry5$Estimate)
+lsv.entry5<-var(LSM.Entry5$Estimate)
+Avg.Var.Table5<-data.frame("Source"=c("Entry"), "Average" = c(lsm.entry5), "Variance" = c(lsv.entry5))
+paged_table(Avg.Var.Table5)
+```
+
+### ANOVA Tables
+
+Analysis of Variance Table of **Type I** with Kenward-Roger approximation for degrees of freedom:
+
+```{r modelc4.anova1, cols.print=9, echo=FALSE}
+paged_table(anovalmer(model5))
+```
+
+**Type III** Analysis of Variance Table with Satterthwaite's method:
+
+```{r modelc4.anova2, echo=FALSE}
+paged_table(anova(model5))
+```
+
+### Random-Effects
+
+```{r modelc4.reml, echo=FALSE, message=FALSE}
+paged_table(ranova(model5))
+```
+
+### CV, RMSE & R²
+
+**Coefficient of Vairance (CV):**
+
+The lower the CV, the smaller the residuals relative to the predicted value.  This is suggestive of a good model fit. 
+
+* **SMALLER IS BETTER!** (i.e. The model with the smaller CV has predicted values that are closer to the actual values.)
+
+
+**Root Mean Square Error(RMSE):**
+
+RMSE is an absolute measure of fit.
+
+The standard deviation of the residuals. RMSE physically measures how spread out these residuals are from the line of best fit. The RMSE is a measure of the average deviation of the estimates from the observed values.
+
+* **SMALLER IS BETTER!** (i.e. lower values of RMSE indicate better fit.)
+
+
+**R-squared (R²):**
+
+R² is a relative measure of fit.
+
+R² is the proportional improvement in prediction from the regression model, compared to the mean model. R-squared indicates the goodness of fit of the model. The fraction of the total sum of squares that is explained by the regression. Scaled from 0 to 1.
+
+* **LARGER IS BETTER!** (i.e. values closer to 1 indicate better fit.)
+
+```{r model5.cv.rmse, comment=NA, echo = FALSE, message=FALSE}
+##CV from "LSDer" package:
+mod5.cv<-LSDer::CVer(model5)
+
+mod5.rmse<-sqrt(mean(residuals(model5)^2))
+mod5.R2<-r.squaredLR(model5)
+CV.RMSE.R2.Table5<-data.frame("CV" = c(mod5.cv), "RMSE" = c(mod5.rmse), "R²" = c(mod5.R2))
+paged_table(CV.RMSE.R2.Table5)
+```
+
+### Fisher's LSD
+
+**Fisher's Least Significant Differnce (LSD):**
+
+Least significant difference is used to compare means of different treatments that have an equal number of replications.
+
+* **The yields must be greater than the LSD value between any two treatments to be considered significant.**
+
+``` {r model5.predict.25, comment=NA, echo = FALSE, fig.width=10, fig.height=6.5}
+pre5<-predictmeans(model5, "entry", pairwise=TRUE, level=0.25, plot=FALSE, newwd=FALSE)
+LSDpre5<-pre5[["LSD"]][["Aveg.LSD"]]
+LSD.Table5<-data.frame("."="Average LSD at 75% Confidence Level =", "VALUE" = as.factor(c(LSDpre5)))
+paged_table(LSD.Table5)
+pre5.1<-predictmeans(model5, "entry", pairwise=TRUE, level=0.25, pplot=TRUE, mplot=TRUE, newwd=FALSE)
+```
+
+```{r model5.lsdplot, echo=FALSE, fig.width=10, fig.height=6.5}
+pre5.2<-predictmeans(model5, "entry", pairwise=TRUE, level=0.25, pplot=TRUE, mplot=FALSE, newwd=FALSE)
+```
+
+# Export Clean Dataset: {.tabset .tabset-fade}
+
+**Select which "cleaned" dataset you would like to utilize, and export from analysis as CSV:**
+
+```{r download.QQ, echo=FALSE}
+IQRClean1$color<-NULL
+IQRClean2$color<-NULL
+QQClean$color<-NULL
+CooksClean$color<-NULL
+date<-format(Sys.time(), "%m-%d-%Y")
+IQRC1<-paste(c(params$book.name), "IQRCleaned_mins", c(date), "csv", sep=".")
+IQRC2<-paste(c(params$book.name), "IQRCleaned_minmax", c(date), "csv", sep=".")
+QQC<-paste(c(params$book.name), "QQCleaned", c(date), "csv", sep=".")
+CooksC<-paste(c(params$book.name), "CooksCleaned", c(date), "csv", sep=".")
+
+embed_data= function(x= mtcars, filename= "file.csv", label= "Get data"){
+  encode_data= function(x){
+    write.csv(x, "file", row.names=FALSE)
+    enc= sprintf('data:text/csv;base64,%s', openssl::base64_encode(paste0(readLines("file"), collapse="\n")) )
+    unlink("file")
+    return(enc)
+  }
+  paste0("<a download='", filename, "' href=", encode_data(x), ">", label, "</a>")
+}
+```
+
+* `r embed_data(IQRClean1, filename=c(IQRC1), label= "Export IQR Cleaned - ONLY Min. Removed Data")`
+
+* `r embed_data(IQRClean2, filename=c(IQRC2), label= "Export IQR Cleaned - BOTH Min. & Max Data")`
+
+* `r embed_data(QQClean, filename=c(QQC), label= "Export Q-Q Cleaned Data")`
+
+* `r embed_data(CooksClean, filename=c(CooksC), label= "Export Cooks Distance Cleaned Data")`
+
+# References:
+1. **Hair, J., Anderson, R., Tatham, R. and Black W.** (1998). Multivariate Data Analysis (fifth edition). Englewood Cliffs, NJ: Prentice-Hall.
