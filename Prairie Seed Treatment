@@ -1,0 +1,773 @@
+---
+title: "**District Wide Model Analysis**"
+author: '`r params$author`'
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output: 
+  html_document:
+    theme: darkly
+    toc: true
+    toc_float:
+      collapsed: true
+params:
+  author:
+    label: "Analysis Conducted By:"
+    value: Ryan Budnik
+    input: select
+    choices: [Ryan Budnik, Graydon Marzen, Jim Rouse, Ryan Frasch, Shawn Bryant]
+  data:
+    label: "Input dataset:"
+    value: 19PST.csv
+    input: select
+    choices: [19PST.csv]
+  year:
+    label: "Year"
+    value: 2019
+    input: select
+    choices: [2019]
+---
+
+# Overview:
+The following report renders a district-wide mixed model analysis with corresponding figures for the *`r params$year`* Prairie Seed Treatment trials. 
+
+```{r libs, include = FALSE}
+library(rmarkdown)
+library(knitr)
+library(dplyr)
+library(agricolae)
+library(nlme)
+library(lme4)
+library(lmerTest)
+library(randomcoloR)
+library(car)
+library(predictmeans)
+library(shiny)
+library(shinythemes)
+library(psych)
+library(emmeans)
+library(MuMIn)
+```
+
+```{r setup, echo = FALSE}
+###Set wd & Import CSV Dataset:
+df<-read.csv(c(params$data),header=T)
+
+###Remove Discards?:
+data<-df[!(df$discard=="Yes"),]
+
+###Reduce data for summary::
+data.sum<-data%>%select("emergence", "vigor", "stand", "stand.percent")
+
+###Set Factors:
+data$trt<-factor(data$trt)
+data$hybrid<-factor(data$hybrid)
+data$planting.date<-factor(data$planting.date)
+data$rep<-factor(data$rep)
+data$pass<-factor(data$pass)
+data$range<-factor(data$range)
+
+###Variance, Mean & IQRS:
+  ###Treatment
+Trt.Variance<-var(as.numeric(data$trt))
+  ###Hybrid
+Hybrid.Variance<-(as.numeric(data$hybrid))
+  ###Emergence
+avg.emergence <- mean(data$emergence, na.rm = TRUE)
+max.emergence <- max(data$emergence, na.rm=TRUE)
+min.emergence <- min(data$emergence, na.rm=TRUE)
+  ###Vigor
+avg.vigor <- mean(data$vigor, na.rm = TRUE)
+max.vigor <- max(data$vigor, na.rm=TRUE)
+min.vigor <- min(data$vigor, na.rm=TRUE)
+  ###Stand
+avg.stand <- mean(data$stand, na.rm = TRUE)
+max.stand <- max(data$stand, na.rm=TRUE)
+min.stand <- min(data$stand, na.rm=TRUE)
+  ###Stand Percentage
+avg.stand.percent <- mean(data$stand.percent, na.rm = TRUE)
+max.stand.percent <- max(data$stand.percent, na.rm=TRUE)
+min.stand.percent <- min(data$stand.percent, na.rm=TRUE)
+
+# Percent function::
+percent<-function(x, digits = 6, format = "f", ...) {paste0(formatC( x, format = format, digits = digits, ...),"%")}
+```
+
+# Data Visualization: {.tabset .tabset-fade}
+
+## Summary
+
+```{r summary, echo = FALSE, cols.print=15, warning=FALSE}
+described<-describe(data.sum, skew=FALSE, ranges=TRUE)
+paged_table(described, options(scipen=999, digits=4))
+```
+
+## Emergence
+
+```{r agg.emerge, echo = FALSE, cols.print=5, rows.print=30, warning=FALSE}
+emergence.avgs <- data.frame(
+aggregate(emergence~trt, data=data, length),
+aggregate(emergence~trt, data=data, min),
+aggregate(emergence~trt, data=data, mean),
+aggregate(emergence~trt, data=data, max))
+emergence.avgs <- emergence.avgs[,c(1,2,4,6,8)]
+colnames(emergence.avgs) <- c("trt", "obs.count", "min", "mean", "max")
+emergence.avgs<-emergence.avgs[order(emergence.avgs$mean, decreasing = FALSE),]
+row.names(emergence.avgs) <- NULL 
+paged_table(emergence.avgs, options(scipen=999, digits=4))
+```
+
+## Vigor
+
+```{r agg.vigor, echo = FALSE, cols.print=5, rows.print=30, warning=FALSE}
+vigor.avgs <- data.frame(
+aggregate(vigor~trt, data=data, length),
+aggregate(vigor~trt, data=data, min),
+aggregate(vigor~trt, data=data, mean),
+aggregate(vigor~trt, data=data, max))
+vigor.avgs <- vigor.avgs[,c(1,2,4,6,8)]
+colnames(vigor.avgs) <- c("trt", "obs.count", "min", "mean", "max")
+vigor.avgs<-vigor.avgs[order(vigor.avgs$mean, decreasing = FALSE),]
+row.names(vigor.avgs) <- NULL 
+paged_table(vigor.avgs, options(scipen=999, digits=4))
+```
+
+## Stand
+
+```{r agg.stand, echo = FALSE, cols.print=5, rows.print=30, warning=FALSE}
+stand.avgs <- data.frame(
+aggregate(stand~trt, data=data, length),
+aggregate(stand~trt, data=data, min),
+aggregate(stand~trt, data=data, mean),
+aggregate(stand~trt, data=data, max))
+stand.avgs <- stand.avgs[,c(1,2,4,6,8)]
+colnames(stand.avgs) <- c("trt", "obs.count", "min", "mean", "max")
+stand.avgs<-stand.avgs[order(stand.avgs$mean, decreasing = FALSE),]
+row.names(stand.avgs) <- NULL 
+paged_table(stand.avgs, options(scipen=999, digits=4))
+```
+
+## Stand Percentage
+
+```{r agg.standp, echo = FALSE, cols.print=5, rows.print=30, warning=FALSE}
+standp.avgs <- data.frame(
+aggregate(stand.percent~trt, data=data, length),
+aggregate(stand.percent~trt, data=data, min),
+aggregate(stand.percent~trt, data=data, mean),
+aggregate(stand.percent~trt, data=data, max))
+standp.avgs <- standp.avgs[,c(1,2,4,6,8)]
+colnames(standp.avgs) <- c("trt", "obs.count", "min", "mean", "max")
+standp.avgs<-standp.avgs[order(standp.avgs$mean, decreasing = FALSE),]
+row.names(standp.avgs) <- NULL
+paged_table(standp.avgs, options(scipen=999, digits=4))
+```
+
+
+## Histograms
+
+```{r histo.emergence, echo = FALSE, fig.width=10, fig.height=6.5}
+histo<-hist(data$emergence, col="purple", xlim=c(0,15), main="Distribution of Emergence", xlab="Emergence")
+abline(v = max.emergence, col="red")
+abline(v = avg.emergence, col="red", lwd=c(3))
+abline(v = min.emergence, col="red")
+```
+
+```{r histo.vigor, echo = FALSE, fig.width=10, fig.height=6.5}
+histo<-hist(data$vigor, col="purple", xlim=c(0,5), main="Distribution of Vigor", xlab="Vigor")
+abline(v = max.vigor, col="red")
+abline(v = avg.vigor, col="red", lwd=c(3))
+abline(v = min.vigor, col="red")
+```
+
+```{r histo.stand, echo = FALSE, fig.width=10, fig.height=6.5}
+histo<-hist(data$stand, col="purple", xlim=c(0,40), main="Distribution of Stand", xlab="Stand")
+abline(v = max.stand, col="red")
+abline(v = avg.stand, col="red", lwd=c(3))
+abline(v = min.stand, col="red")
+```
+
+```{r histo.stand.percent, echo = FALSE, fig.width=10, fig.height=6.5}
+histo<-hist(data$stand.percent, col="purple", xlim=c(0,100), main="Distribution of Stand Percentage", xlab="Stand Percentage")
+abline(v = max.stand.percent, col="red")
+abline(v = avg.stand.percent, col="red", lwd=c(3))
+abline(v = min.stand.percent, col="red")
+```
+
+## Barplots
+
+```{r bar.emergence, echo = FALSE, fig.width=10, fig.height=6.5}
+barplot(data$emergence, names.arg=data$trt, ylim=c(0,15), main="Distribution of Emergence", ylab="Emergence", xlab="Treatment", cex.names=.45)
+abline(h = max.emergence, col="red")
+abline(h = avg.emergence, col="red", lwd=c(3))
+abline(h = min.emergence, col="red")
+```
+
+```{r bar.vigor, echo = FALSE, fig.width=10, fig.height=6.5}
+barplot(data$vigor, names.arg=data$trt, ylim=c(0,5), main="Distribution of Vigor", ylab="Vigor", xlab="Treatment", cex.names=.45)
+abline(h = max.vigor, col="red")
+abline(h = avg.vigor, col="red", lwd=c(3))
+abline(h = min.vigor, col="red")
+```
+
+```{r bar.stand, echo = FALSE, fig.width=10, fig.height=6.5}
+barplot(data$stand, names.arg=data$trt, ylim=c(0,40), main="Distribution of Stand", ylab="Stand", xlab="Treatment", cex.names=.45)
+abline(h = max.stand, col="red")
+abline(h = avg.stand, col="red", lwd=c(3))
+abline(h = min.stand, col="red")
+```
+
+```{r bar.stand.percent, echo = FALSE, fig.width=10, fig.height=6.5}
+barplot(data$stand.percent, names.arg=data$trt, ylim=c(0,100), main="Distribution of Stand Percentage", ylab="Stand Percentage", xlab="Treatment", cex.names=.45)
+abline(h = max.stand.percent, col="red")
+abline(h = avg.stand.percent, col="red", lwd=c(3))
+abline(h = min.stand.percent, col="red")
+```
+
+## Boxplot
+
+``` {r boxplot.emergence, comments=NA, echo = FALSE, fig.width=10, fig.height=7, message=FALSE}
+Boxplot(data$emergence~data$trt,id=TRUE, main="2019 Prairie Seed Treatment Emergence", xlab="Treatment", ylab="Emergence", las=2)
+abline(h = max.emergence, col="red")
+abline(h = avg.emergence, col="red", lwd=c(3))
+abline(h = min.emergence, col="red")
+```
+
+``` {r boxplot.vigor, comments=NA, echo = FALSE, fig.width=10, fig.height=7, message=FALSE}
+Boxplot(data$vigor~data$trt,id=TRUE, main="2019 Prairie Seed Treatment Vigor", xlab="Treatment", ylab="Vigor", las=2)
+abline(h = max.vigor, col="red")
+abline(h = avg.vigor, col="red", lwd=c(3))
+abline(h = min.vigor, col="red")
+```
+
+``` {r boxplot.stand, comments=NA, echo = FALSE, fig.width=10, fig.height=7, message=FALSE}
+Boxplot(data$stand~data$trt,id=TRUE, main="2019 Prairie Seed Treatment Stand", xlab="Treatment", ylab="Stand", las=2)
+abline(h = max.stand, col="red")
+abline(h = avg.stand, col="red", lwd=c(3))
+abline(h = min.stand, col="red")
+```
+
+``` {r boxplot.stand.percent, comments=NA, echo = FALSE, fig.width=10, fig.height=7, message=FALSE}
+Boxplot(data$stand.percent~data$trt,id=TRUE, main="2019 Prairie Seed Treatment Percentage Stand", xlab="Treatment", ylab="Percentage Stand", las=2)
+abline(h = max.stand.percent, col="red")
+abline(h = avg.stand.percent, col="red", lwd=c(3))
+abline(h = min.stand.percent, col="red")
+```
+
+
+# Linear Model Analyses: {.tabset .tabset-fade}
+
+**(1) RATING = TREATMENT**
+
+```{r trt.models, echo=FALSE}
+trt.emerge<-lm(emergence~trt, data=data)
+trt.vigor<-lm(vigor~trt, data=data)
+trt.stand<-lm(stand~trt, data=data)
+trt.standp<-lm(stand.percent~trt, data=data)
+```
+
+**,(2) RATING = TREATMENT + PLANTING DATE**
+
+```{r trt.models.add.planting.date, echo=FALSE}
+trt.emerge.pd<-lm(emergence~trt + planting.date, data=data)
+trt.vigor.pd<-lm(vigor~trt + planting.date, data=data)
+trt.stand.pd<-lm(stand~trt + planting.date, data=data)
+trt.standp.pd<-lm(stand.percent~trt + planting.date, data=data)
+```
+
+**,(3) RATING = TREATMENT + PLANTING DATE + HYBRID**
+
+```{r trt.models.add.planting.date.add.hybrid, echo=FALSE}
+trt.emerge.pdh<-lm(emergence~trt + planting.date + hybrid, data=data)
+trt.vigor.pdh<-lm(vigor~trt + planting.date + hybrid, data=data)
+trt.stand.pdh<-lm(stand~trt + planting.date + hybrid, data=data)
+trt.standp.pdh<-lm(stand.percent~trt + planting.date + hybrid, data=data)
+```
+
+**,(4) RATING = TREATMENT + HYBRID + HYBRID*TREATMENT**
+
+```{r trt.models.add.hybrid.by.trt, echo=FALSE}
+trt.emerge.hht<-lm(emergence~trt + hybrid + hybrid*trt, data=data)
+trt.vigor.hht<-lm(vigor~trt + hybrid + hybrid*trt, data=data)
+trt.stand.hht<-lm(stand~trt + hybrid + hybrid*trt, data=data)
+trt.standp.hht<-lm(stand.percent~trt + hybrid + hybrid*trt, data=data)
+```
+
+**,(5) RATING = TREATMENT + PLANTING DATE + PLANTING DATE*TREATMENT**
+
+```{r trt.models.add.planting.date.by.trt, echo=FALSE}
+trt.emerge.pdt<-lm(emergence~trt + planting.date + planting.date*trt, data=data)
+trt.vigor.pdt<-lm(vigor~trt + planting.date + planting.date*trt, data=data)
+trt.stand.pdt<-lm(stand~trt + planting.date + planting.date*trt, data=data)
+trt.standp.pdt<-lm(stand.percent~trt + planting.date + planting.date*trt, data=data)
+```
+
+**,(6) RATING = TREATMENT + PLANTING DATE + HYBRID*TREATMENT**
+
+```{r trt.models.add.planting.date.trt:hybrid, echo=FALSE}
+trt.emerge.pdht<-lm(emergence~trt + planting.date + hybrid*trt, data=data)
+trt.vigor.pdht<-lm(vigor~trt + planting.date + hybrid*trt, data=data)
+trt.stand.pdht<-lm(stand~trt + planting.date + hybrid*trt, data=data)
+trt.standp.pdht<-lm(stand.percent~trt + planting.date + hybrid*trt, data=data)
+```
+
+
+## Fisher's LSD: From Least Square (LS) Means  {.tabset .tabset-fade}
+
+**Fisher's Least Significant Differnce (LSD):**
+
+Least significant difference is used to compare means of different treatments that have an equal number of replications.
+
+* **The yields must be greater than the LSD value between any two treatments to be considered significant.**
+
++ Observed Means: Regular arithmetic means that can be computed by hand directly on your data without reference to any statistical model.
+
++ **Least Squares Means (LS Means):** Means that are computed based on a linear model such as ANOVA.
+
+
+```{r lsm.trt.emergence, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.EMERGE<-predictmeans(trt.emerge, "trt", level=.25)
+lsd.emerge<-LSM.TRT.EMERGE[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.vigor, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.VIGOR<-predictmeans(trt.vigor, "trt", level=.25)
+lsd.vigor<-LSM.TRT.VIGOR[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.stand, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.STAND<-predictmeans(trt.stand, "trt", level=.25)
+lsd.stand<-LSM.TRT.STAND[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.standp, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.STANDP<-predictmeans(trt.standp, "trt", level=.25)
+lsd.standp<-LSM.TRT.STANDP[["LSD"]][["Aveg.LSD"]]
+```
+
+
+
+```{r lsm.trt.emergence.pd, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.EMERGE.PD<-predictmeans(trt.emerge.pd, "trt", level=.25)
+lsd.emerge.pd<-LSM.TRT.EMERGE.PD[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.vigor.pd, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.VIGOR.PD<-predictmeans(trt.vigor.pd, "trt", level=.25)
+lsd.vigor.pd<-LSM.TRT.VIGOR.PD[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.stand.pd, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.STAND.PD<-predictmeans(trt.stand.pd, "trt", level=.25)
+lsd.stand.pd<-LSM.TRT.STAND.PD[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.standp.pd, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.STANDP.PD<-predictmeans(trt.standp.pd, "trt", level=.25)
+lsd.standp.pd<-LSM.TRT.STANDP.PD[["LSD"]][["Aveg.LSD"]]
+```
+
+
+
+```{r lsm.trt.emergence.pdh, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.EMERGE.pdh<-predictmeans(trt.emerge.pdh, "trt", level=.25)
+lsd.emerge.pdh<-LSM.TRT.EMERGE.pdh[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.vigor.pdh, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.VIGOR.pdh<-predictmeans(trt.vigor.pdh, "trt", level=.25)
+lsd.vigor.pdh<-LSM.TRT.VIGOR.pdh[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.stand.pdh, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.STAND.pdh<-predictmeans(trt.stand.pdh, "trt", level=.25)
+lsd.stand.pdh<-LSM.TRT.STAND.pdh[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.standp.pdh, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.STANDP.pdh<-predictmeans(trt.standp.pdh, "trt", level=.25)
+lsd.standp.pdh<-LSM.TRT.STANDP.pdh[["LSD"]][["Aveg.LSD"]]
+```
+
+
+
+```{r lsm.trt.emergence.hht, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.EMERGE.hht<-predictmeans(trt.emerge.hht, "trt", level=.25)
+lsd.emerge.hht<-LSM.TRT.EMERGE.hht[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.vigor.hht, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.VIGOR.hht<-predictmeans(trt.vigor.hht, "trt", level=.25)
+lsd.vigor.hht<-LSM.TRT.VIGOR.hht[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.stand.hht, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.STAND.hht<-predictmeans(trt.stand.hht, "trt", level=.25)
+lsd.stand.hht<-LSM.TRT.STAND.hht[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.standp.hht, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.STANDP.hht<-predictmeans(trt.standp.hht, "trt", level=.25)
+lsd.standp.hht<-LSM.TRT.STANDP.hht[["LSD"]][["Aveg.LSD"]]
+```
+
+
+
+```{r lsm.trt.emergence.pdt, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.EMERGE.pdt<-predictmeans(trt.emerge.pdt, "trt", level=.25)
+lsd.emerge.pdt<-LSM.TRT.EMERGE.pdt[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.vigor.pdt, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.VIGOR.pdt<-predictmeans(trt.vigor.pdt, "trt", level=.25)
+lsd.vigor.pdt<-LSM.TRT.VIGOR.pdt[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.stand.pdt, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.STAND.pdt<-predictmeans(trt.stand.pdt, "trt", level=.25)
+lsd.stand.pdt<-LSM.TRT.STAND.pdt[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.standp.pdt, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.STANDP.pdt<-predictmeans(trt.standp.pdt, "trt", level=.25)
+lsd.standp.pdt<-LSM.TRT.STANDP.pdt[["LSD"]][["Aveg.LSD"]]
+```
+
+
+
+```{r lsm.trt.emergence.pdht, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.EMERGE.pdht<-predictmeans(trt.emerge.pdht, "trt", level=.25)
+lsd.emerge.pdht<-LSM.TRT.EMERGE.pdht[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.vigor.pdht, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.VIGOR.pdht<-predictmeans(trt.vigor.pdht, "trt", level=.25)
+lsd.vigor.pdht<-LSM.TRT.VIGOR.pdht[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.stand.pdht, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.STAND.pdht<-predictmeans(trt.stand.pdht, "trt", level=.25)
+lsd.stand.pdht<-LSM.TRT.STAND.pdht[["LSD"]][["Aveg.LSD"]]
+```
+
+```{r lsm.trt.standp.pdht, comment=NA, echo=FALSE, message=FALSE}
+options(scipen=6)
+LSM.TRT.STANDP.pdht<-predictmeans(trt.standp.pdht, "trt", level=.25)
+lsd.standp.pdht<-LSM.TRT.STANDP.pdht[["LSD"]][["Aveg.LSD"]]
+```
+
+
+
+
+```{r LSD.table, comment=NA, echo=FALSE, cols.print=6, rows.print=15, message=FALSE}
+options(scipen=5)
+Combo.LSD<- data.frame("Rating" = c("Emergence", "Vigor", "Stand", "Stand Percentage") ,"Trt" = as.numeric(c(lsd.emerge, lsd.vigor, lsd.stand, lsd.standp)), "Trt+Planting.Date" = as.numeric(c(lsd.emerge.pd, lsd.vigor.pd, lsd.stand.pd, lsd.standp.pd)), "Trt+Planting.Date+Hybrid" = as.numeric(c(lsd.emerge.pdh, lsd.vigor.pdh, lsd.stand.pdh, lsd.standp.pdh)), "Trt+Hybrid+Trt*Hybrid" = as.numeric(c(lsd.emerge.hht, lsd.vigor.hht, lsd.stand.hht, lsd.standp.hht)), "Trt+Planting.Date+Trt*Planting.Date" = as.numeric(c(lsd.emerge.pdt, lsd.vigor.pdt, lsd.stand.pdt, lsd.standp.pdt)), "Trt+Planting.Date+Hybrid:Trt" = as.numeric(c(lsd.emerge.pdht, lsd.vigor.pdht, lsd.stand.pdht, lsd.standp.pdht)))
+paged_table(Combo.LSD)
+```
+
+
+<!-- ### Average & Variance -->
+
+<!-- ```{r lsm.avg.var, comment=NA, echo=FALSE, message=FALSE} -->
+<!-- lsm.entry<-mean(LSM.Entry$Estimate) -->
+<!-- lsm.loc<-mean(LSM.District$Estimate) -->
+<!-- lsv.entry<-var(LSM.Entry$Estimate) -->
+<!-- lsv.loc<-var(LSM.District$Estimate) -->
+<!-- Avg.Var.Table<-data.frame("Source"=c("Entry", "Location"), "Average" = c(lsm.entry, lsm.loc), "Variance" = c(lsv.entry, lsv.loc)) -->
+<!-- paged_table(Avg.Var.Table) -->
+<!-- ``` -->
+
+
+## ANOVA Tables {.tabset .tabset-fade}
+
+A small *P-value*, and a large *F-statistic* constitute grounds for null hypothesis rejection.
+
+ANOVA uses the *F-statistic* to determine whether the variability between group means is larger than the variability of the observations within the groups. If that ratio is sufficiently large, you can conclude that not all the means are equal. A low *p-value* suggests that your sample provides enough evidence that you can reject the null hypothesis for the entire population.
+
+* The **null hypothesis** states that the model with no independent variables fits the data as well as your model.
+
+* The **alternative hypothesis** says that your model fits the data better than the intercept-only model.
+
+
+Analysis of Variance Table of **Type I** with Kenward-Roger approximation for degrees of freedom:
+
+### Emergence
+
+```{r emergence.model.anovas, cols.print=9, echo = FALSE}
+options(scipen=3)
+paged_table(anova(trt.emerge))
+paged_table(anova(trt.emerge.pd))
+paged_table(anova(trt.emerge.pdt))
+paged_table(anova(trt.emerge.hht))
+paged_table(anova(trt.emerge.pdh))
+paged_table(anova(trt.emerge.pdht))
+```
+
+### Vigor
+
+```{r vigor.model.anovas, cols.print=9, echo = FALSE}
+paged_table(anova(trt.vigor))
+paged_table(anova(trt.vigor.pd))
+paged_table(anova(trt.vigor.pdt))
+paged_table(anova(trt.vigor.hht))
+paged_table(anova(trt.vigor.pdh))
+paged_table(anova(trt.vigor.pdht))
+```
+
+### Stand
+
+```{r stand.model.anovas, cols.print=9, echo = FALSE}
+paged_table(anova(trt.stand))
+paged_table(anova(trt.stand.pd))
+paged_table(anova(trt.stand.pdt))
+paged_table(anova(trt.stand.hht))
+paged_table(anova(trt.stand.pdh))
+paged_table(anova(trt.stand.pdht))
+```
+
+### Stand Percentage
+
+```{r standp.model.anovas, cols.print=9, echo = FALSE}
+paged_table(anova(trt.standp))
+paged_table(anova(trt.standp.pd))
+paged_table(anova(trt.standp.pdt))
+paged_table(anova(trt.standp.hht))
+paged_table(anova(trt.standp.pdh))
+paged_table(anova(trt.standp.pdht))
+```
+
+
+
+## CV's
+
+**Coefficient of Vairance (CV):**
+
+The lower the CV, the smaller the residuals relative to the predicted value.  This is suggestive of a good model fit. 
+
+* **SMALLER IS BETTER!** (i.e. The model with the smaller CV has predicted values that are closer to the actual values.)
+
+<!-- , RMSE & R² -->
+
+<!-- **Root Mean Square Error(RMSE):** -->
+
+<!-- *RMSE is an absolute measure of fit.* -->
+
+<!-- The standard deviation of the residuals. RMSE physically measures how spread out these residuals are from the line of best fit. The RMSE is a measure of the average deviation of the estimates from the observed values. -->
+
+<!-- * **SMALLER IS BETTER!** (i.e. lower values of RMSE indicate better fit.) -->
+
+
+<!-- **R-squared (R²):** -->
+
+<!-- *R² is a relative measure of fit.* -->
+
+<!-- R² is the proportional improvement in prediction from the regression model, compared to the mean model. R² indicates the goodness of fit of the model. The fraction of the total sum of squares that is explained by the regression. Scaled from 0 to 1. -->
+
+<!-- * **LARGER IS BETTER!** (i.e. values closer to 1 indicate better fit.) -->
+
+```{r model1.cv.rmse, comment=NA, echo = FALSE, message=FALSE}
+##CV
+emerge1<-cv.model(trt.emerge)
+vigor1<-cv.model(trt.vigor)
+stand1<-cv.model(trt.stand)
+standp1<-cv.model(trt.standp)
+
+emerge2<-cv.model(trt.emerge.pd)
+vigor2<-cv.model(trt.vigor.pd)
+stand2<-cv.model(trt.stand.pd)
+standp2<-cv.model(trt.standp.pd)
+
+emerge3<-cv.model(trt.emerge.pdh)
+vigor3<-cv.model(trt.vigor.pdh)
+stand3<-cv.model(trt.stand.pdh)
+standp3<-cv.model(trt.standp.pdh)
+
+emerge4<-cv.model(trt.emerge.hht)
+vigor4<-cv.model(trt.vigor.hht)
+stand4<-cv.model(trt.stand.hht)
+standp4<-cv.model(trt.standp.hht)
+
+emerge5<-cv.model(trt.emerge.pdt)
+vigor5<-cv.model(trt.vigor.pdt)
+stand5<-cv.model(trt.stand.pdt)
+standp5<-cv.model(trt.standp.pdt)
+
+emerge6<-cv.model(trt.emerge.pdht)
+vigor6<-cv.model(trt.vigor.pdht)
+stand6<-cv.model(trt.stand.pdht)
+standp6<-cv.model(trt.standp.pdht)
+
+
+# mod1.rmse<-sqrt(mean(residuals(model1)^2))
+# mod1.R2<-r.squaredLR(model1)
+# CV.RMSE.R2.Table1<-data.frame("CV" = c(mod1.cv), "RMSE" = c(mod1.rmse), "R²" = c(mod1.R2))
+# paged_table(CV.RMSE.R2.Table1)
+```
+
+```{r CV.table, comment=NA, echo=FALSE, cols.print=7, rows.print=15, message=FALSE}
+options(scipen=6)
+Combo.CV<- data.frame("Rating" = c("Emergence=", "Vigor=", "Stand=", "Stand Percentage=") ,"Trt" = as.numeric(c(emerge1, vigor1, stand1, standp1)), "Trt+Planting.Date" = as.numeric(c(emerge2, vigor2, stand2, standp2)), "Trt+Planting.Date+Hybrid" = as.numeric(c(emerge3, vigor3, stand3, standp3)), "Trt+Hybrid+Hybrid*Trt" = as.numeric(c(emerge5, vigor5, stand5, standp5)), "Trt+Planting.Date+Planting.Date*Trt" = as.numeric(c(emerge5, vigor5, stand5, standp5)), "Trt+Planting.Date+Hybrid:Trt" = as.numeric(c(emerge6, vigor6, stand6, standp6)))
+paged_table(Combo.CV)
+```
+
+
+# Outlier Detection: {.tabset .tabset-fade}
+
+## Basic Models: Normal Q-Q Plot
+
+QQ plot (or quantile-quantile plot) draws the correlation between a given sample and the normal distribution. A 45-degree reference line is also plotted. QQ plots are used to visually check the normality of the data.
+
+```{r qq, echo = FALSE, fig.width=9, warning = FALSE}
+qq.emerge<-qqnorm(resid(trt.emerge), pch=23, bg="black")
+qqline(resid(trt.emerge), col="red", lwd=c(2))
+text(qq.emerge, rownames(data), cex=0.8, col= "blue4", pos=4, offset = 0.5)
+text(qq.emerge, label=(data$trt), cex=0.8, col= "red4", pos=4, offset = 1.6)
+
+qq.vigor<-qqnorm(resid(trt.vigor), pch=23, bg="black")
+qqline(resid(trt.vigor), col="red", lwd=c(2))
+text(qq.vigor, rownames(data), cex=0.8, col= "blue4", pos=4, offset = 0.5)
+text(qq.vigor, label=(data$trt), cex=0.8, col= "red4", pos=4, offset = 1.6)
+
+qq.stand<-qqnorm(resid(trt.stand), pch=23, bg="black")
+qqline(resid(trt.stand), col="red", lwd=c(2))
+text(qq.stand, rownames(data), cex=0.8, col= "blue4", pos=4, offset = 0.5)
+text(qq.stand, label=(data$trt), cex=0.8, col= "red4", pos=4, offset = 1.6)
+
+qq.standp<-qqnorm(resid(trt.standp), pch=23, bg="black")
+qqline(resid(trt.standp), col="red", lwd=c(2))
+text(qq.standp, rownames(data), cex=0.8, col= "blue4", pos=4, offset = 0.5)
+text(qq.standp, label=(data$trt), cex=0.8, col= "red4", pos=4, offset = 1.6)
+```
+
+1. Data Points = Residuals for linear mixed model.
+2. <span style="color:blue">Blue</span> Labels = **row** number.
+3. <span style="color:red">Red</span> Labels = **trt** number.
+
+## Models w/Planting Date: Normal Q-Q Plot
+
+QQ plot (or quantile-quantile plot) draws the correlation between a given sample and the normal distribution. A 45-degree reference line is also plotted. QQ plots are used to visually check the normality of the data.
+
+```{r qq.pd, echo = FALSE, fig.width=9, warning = FALSE}
+qq.emerge.pd<-qqnorm(resid(trt.emerge.pd), pch=23, bg="black")
+qqline(resid(trt.emerge.pd), col="red", lwd=c(2))
+text(qq.emerge.pd, rownames(data), cex=0.8, col= "blue4", pos=4, offset = 0.5)
+text(qq.emerge.pd, label=(data$trt), cex=0.8, col= "red4", pos=4, offset = 1.6)
+
+qq.vigor.pd<-qqnorm(resid(trt.vigor.pd), pch=23, bg="black")
+qqline(resid(trt.vigor.pd), col="red", lwd=c(2))
+text(qq.vigor.pd, rownames(data), cex=0.8, col= "blue4", pos=4, offset = 0.5)
+text(qq.vigor.pd, label=(data$trt), cex=0.8, col= "red4", pos=4, offset = 1.6)
+
+qq.stand.pd<-qqnorm(resid(trt.stand.pd), pch=23, bg="black")
+qqline(resid(trt.stand.pd), col="red", lwd=c(2))
+text(qq.stand.pd, rownames(data), cex=0.8, col= "blue4", pos=4, offset = 0.5)
+text(qq.stand.pd, label=(data$trt), cex=0.8, col= "red4", pos=4, offset = 1.6)
+
+qq.standp.pd<-qqnorm(resid(trt.standp.pd), pch=23, bg="black")
+qqline(resid(trt.standp.pd), col="red", lwd=c(2))
+text(qq.standp.pd, rownames(data), cex=0.8, col= "blue4", pos=4, offset = 0.5)
+text(qq.standp.pd, label=(data$trt), cex=0.8, col= "red4", pos=4, offset = 1.6)
+```
+
+1. Data Points = Residuals for linear mixed model.
+2. <span style="color:blue">Blue</span> Labels = **row** number.
+3. <span style="color:red">Red</span> Labels = **trt** number.
+
+## Basic Models: Cook's Distance
+
+Cook's distance is useful for identifying outliers in the X values (observations for predictor variables). It also shows the influence of each observation on the fitted response values. An observation with Cook's distance larger than three times the mean Cook's distance might be an outlier.
+
+  + Graphical Reference Thresholds:
+      1. 10/*n*-*k*-1
+      2. 8/*n*-*k*-1
+      3. 4/*n*-*k*-1, (**Hair et.al**,1998)
+
+      where,
+
+      *n* = sample size
+
+      *k* = number of independent variables
+
+```{r cook, echo = FALSE, message=FALSE}
+sample_size<-nrow(data)
+entryL<-as.numeric(length(data$trt))
+Cooksd.emerge<-CookD(trt.emerge, newwd=FALSE)
+abline(h = (10/(sample_size-entryL-1)), col="red")
+abline(h = (8/(sample_size-entryL-1)), col="red", lwd=c(2))
+abline(h = (4/(sample_size-entryL-1)), col="red", lwd=c(3))
+
+Cooksd.vigor<-CookD(trt.vigor, newwd=FALSE)
+abline(h = (10/(sample_size-entryL-1)), col="red")
+abline(h = (8/(sample_size-entryL-1)), col="red", lwd=c(2))
+abline(h = (4/(sample_size-entryL-1)), col="red", lwd=c(3))
+
+Cooksd.stand<-CookD(trt.stand, newwd=FALSE)
+abline(h = (10/(sample_size-entryL-1)), col="red")
+abline(h = (8/(sample_size-entryL-1)), col="red", lwd=c(2))
+abline(h = (4/(sample_size-entryL-1)), col="red", lwd=c(3))
+
+Cooksd.standp<-CookD(trt.standp, newwd=FALSE)
+abline(h = (10/(sample_size-entryL-1)), col="red")
+abline(h = (8/(sample_size-entryL-1)), col="red", lwd=c(2))
+abline(h = (4/(sample_size-entryL-1)), col="red", lwd=c(3))
+```
+
+## Models w/Planting Date: Cook's Distance
+
+Cook's distance is useful for identifying outliers in the X values (observations for predictor variables). It also shows the influence of each observation on the fitted response values. An observation with Cook's distance larger than three times the mean Cook's distance might be an outlier.
+
+  + Graphical Reference Thresholds:
+      1. 10/*n*-*k*-1
+      2. 8/*n*-*k*-1
+      3. 4/*n*-*k*-1, (**Hair et.al**,1998)
+
+      where,
+
+      *n* = sample size
+
+      *k* = number of independent variables
+
+```{r cook.pd, echo = FALSE, message=FALSE}
+Cooksd.emerge.pd<-CookD(trt.emerge.pd, newwd=FALSE)
+abline(h = (10/(sample_size-entryL-1)), col="red")
+abline(h = (8/(sample_size-entryL-1)), col="red", lwd=c(2))
+abline(h = (4/(sample_size-entryL-1)), col="red", lwd=c(3))
+
+Cooksd.vigor.pd<-CookD(trt.vigor.pd, newwd=FALSE)
+abline(h = (10/(sample_size-entryL-1)), col="red")
+abline(h = (8/(sample_size-entryL-1)), col="red", lwd=c(2))
+abline(h = (4/(sample_size-entryL-1)), col="red", lwd=c(3))
+
+Cooksd.stand.pd<-CookD(trt.stand.pd, newwd=FALSE)
+abline(h = (10/(sample_size-entryL-1)), col="red")
+abline(h = (8/(sample_size-entryL-1)), col="red", lwd=c(2))
+abline(h = (4/(sample_size-entryL-1)), col="red", lwd=c(3))
+
+Cooksd.standp.pd<-CookD(trt.standp.pd, newwd=FALSE)
+abline(h = (10/(sample_size-entryL-1)), col="red")
+abline(h = (8/(sample_size-entryL-1)), col="red", lwd=c(2))
+abline(h = (4/(sample_size-entryL-1)), col="red", lwd=c(3))
+```
+
+# References:
+1. **Hair, J., Anderson, R., Tatham, R. and Black W.** (1998). Multivariate Data Analysis (fifth edition). Englewood Cliffs, NJ: Prentice-Hall.
